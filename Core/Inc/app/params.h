@@ -6,7 +6,9 @@
 /*
  * Flash parameter storage — STM32G431RB only.
  * Last 2 KB page (page 63, 0x0801F800) reserved in linker script.
- * Wear leveling: 25 entries per page × 10 000 erases = 250 000 saves.
+ * Wear leveling: 19 entries per page × 10 000 erases = 190 000 saves
+ * (entry count set by PARAMS_MAX in params.c — see the comment there for
+ * why it must be recomputed whenever FlashParams_t changes size).
  */
 
 typedef struct {
@@ -30,8 +32,14 @@ typedef struct {
     float    temp_max_dev_C;
     float    temp_abs_max_C;
     float    temp_timer_s;
+    float    ntc_vref_v;            /* NTC divider reference (V) */
+    float    ntc_rseries_ohm;       /* NTC series resistor (ohm) */
+    float    ntc_sh_a;              /* Steinhart-Hart A */
+    float    ntc_sh_b;              /* Steinhart-Hart B */
+    float    ntc_sh_c;              /* Steinhart-Hart C */
+    uint32_t _pad2;                 /* keeps struct doubleword-aligned */
     uint32_t crc;                   /* CRC32 over all preceding bytes */
-} FlashParams_t;                    /* 80 bytes = 10 × 8 (doubleword-aligned) */
+} FlashParams_t;                    /* 104 bytes = 13 × 8 (doubleword-aligned) */
 
 /* Call after TEC_Control_Init() and Laser_Control_Init(). */
 void Params_Load(void);
@@ -39,7 +47,7 @@ void Params_Load(void);
 /* Write current live state to flash. Returns 0 on success, -1 on error. */
 int  Params_Save(void);
 
-/* Mark parameters as dirty; Params_Process() will save after 3 s debounce. */
+/* Mark parameters as dirty; Params_Process() will save after 20 s debounce. */
 void Params_MarkDirty(void);
 
 /* Call every main-loop iteration to handle deferred auto-save. */

@@ -110,6 +110,8 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
 uint8_t CDC_CLI_Receive(uint8_t *byte); /* 0=HAL_OK, 1=HAL_TIMEOUT (empty) */
+void    CDC_CLI_ResumeIfRoom(void);     /* re-arm RX after backpressure, once drained */
+uint8_t CDC_TakeBreakFlag(void);        /* 1 = a CDC_SEND_BREAK arrived since last call */
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

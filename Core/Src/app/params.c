@@ -1,13 +1,20 @@
 #include "params.h"
 #include "tec_control.h"
 #include "laser_control.h"
+#include "bsp_temp.h"
 #include "stm32g4xx_hal.h"
 #include <string.h>
 
 #define PARAMS_MAGIC   0x4C415352u   /* "LASR" */
 #define PARAMS_PAGE    63u
 #define PARAMS_BASE    0x0801F800u
-#define PARAMS_MAX     25u
+/* PARAMS_MAX * sizeof(FlashParams_t) must fit inside the 2 KB FLASH_PARAMS
+ * region (STM32G431XX_FLASH.ld) -- which is also the last page of physical
+ * flash on this chip, so overflowing it means writing past the end of flash
+ * entirely, not just into unintended memory. sizeof(FlashParams_t) is
+ * currently 104 bytes (13 doublewords); 2048/104 = 19.69, so 19 is the max
+ * that fits. Re-check this by hand any time FlashParams_t grows. */
+#define PARAMS_MAX     19u
 #define DEBOUNCE_MS    20000u
 
 static uint8_t  s_dirty;
@@ -104,6 +111,12 @@ void Params_Load(void)
     g_laser_temp_max_dev_C = p->temp_max_dev_C;
     g_laser_temp_abs_max_C = p->temp_abs_max_C;
     g_laser_temp_timer_s   = p->temp_timer_s;
+
+    g_ntc_vref_v      = p->ntc_vref_v;
+    g_ntc_rseries_ohm = p->ntc_rseries_ohm;
+    g_ntc_sh_a        = p->ntc_sh_a;
+    g_ntc_sh_b        = p->ntc_sh_b;
+    g_ntc_sh_c        = p->ntc_sh_c;
 }
 
 int Params_Save(void)
@@ -115,7 +128,7 @@ int Params_Save(void)
 
     HAL_FLASH_Unlock();
 
-    if (next_slot >= PARAMS_MAX) {
+    if (best < 0 || next_slot >= PARAMS_MAX) {
         if (flash_erase_params_page() != 0) {
             HAL_FLASH_Lock();
             return -1;
@@ -143,6 +156,11 @@ int Params_Save(void)
     p.temp_max_dev_C     = g_laser_temp_max_dev_C;
     p.temp_abs_max_C     = g_laser_temp_abs_max_C;
     p.temp_timer_s       = g_laser_temp_timer_s;
+    p.ntc_vref_v         = g_ntc_vref_v;
+    p.ntc_rseries_ohm    = g_ntc_rseries_ohm;
+    p.ntc_sh_a           = g_ntc_sh_a;
+    p.ntc_sh_b           = g_ntc_sh_b;
+    p.ntc_sh_c           = g_ntc_sh_c;
     p.crc = crc32((const uint8_t *)&p, sizeof(FlashParams_t) - sizeof(uint32_t));
 
     uint32_t addr   = PARAMS_BASE + next_slot * (uint32_t)sizeof(FlashParams_t);

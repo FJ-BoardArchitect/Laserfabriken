@@ -121,6 +121,37 @@ void BSP_TEC_SetOutput(TecChannel_t ch)
     _polarity_state_ch[ch] = polarity_state;
 }
 
+float BSP_TEC_EstimateVoltage(float normalized_output)
+{
+    /* Reproduce BSP_TEC_SetOutput()'s own dac_code derivation exactly
+     * (lines above: clamp to [0,0.5], invert), so this always reflects
+     * what's actually being commanded, not a separate approximation of it. */
+    float value = normalized_output;
+    if (value < 0.0f) {
+        value = -value;
+    }
+    if (value > 0.5f) value = 0.5f;
+    uint16_t dac_code = 4095u - (uint16_t)(value * 4095.0f);
+
+    /* DAC code -> actual STM32 DAC pin voltage (BSP_DAC_VREF_V, bsp_config.h). */
+    float vdac = ((float)dac_code / 4095.0f) * BSP_DAC_VREF_V;
+
+    /* VDAC -> buck VOUT, via the FB-network formula (BSP_TEC_FB_*, bsp_config.h):
+     * VOUT = VREF + R14*(VREF/R16 + (VREF-VDAC)/R15). */
+    float vout = BSP_TEC_FB_VREF_V
+                 + BSP_TEC_FB_R14_OHM * (BSP_TEC_FB_VREF_V / BSP_TEC_FB_R16_OHM
+                                          + (BSP_TEC_FB_VREF_V - vdac) / BSP_TEC_FB_R15_OHM);
+
+    /* VDAC above the ~2.4V design point implies a negative VOUT target,
+     * which isn't physically real -- the buck goes into OVP lockout and
+     * stops switching instead (matches BSP_TEC_SetRawDAC()'s own comment
+     * on raw=4095 being the empirically-confirmed inert state). Clamp
+     * rather than report a negative "voltage". */
+    if (vout < 0.0f) vout = 0.0f;
+
+    return vout;
+}
+
 // void BSP_TEC_Disable(TecChannel_t ch)
 // {
 //     if (ch != TEC_CRYSTAL)

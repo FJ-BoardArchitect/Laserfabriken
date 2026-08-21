@@ -45,13 +45,23 @@ float PID_Update(PID_t *pid, float measured, float dt_s)
 
     /* Clamp output and back-calculate integral (anti-windup).
      * Keeps integral at the value that produces exactly the clamped output,
-     * so it resumes normally as soon as the plant leaves saturation. */
+     * so it resumes normally as soon as the plant leaves saturation.
+     * Only meaningful when Ki != 0 -- that's the only thing that moves
+     * integral during normal operation (the accumulation line above adds
+     * Ki*error*dt). With Ki == 0, back-calculating anyway freezes whatever
+     * value the last saturation event produced, with nothing left to ever
+     * unwind it afterward -- it silently corrupts every future output until
+     * something calls PID_Reset(). */
     if (output > pid->output_max) {
-        output        = pid->output_max;
-        pid->integral = (double)(pid->output_max - p - pid->d_filtered);
+        output = pid->output_max;
+        if (pid->Ki != 0.0f) {
+            pid->integral = (double)(pid->output_max - p - pid->d_filtered);
+        }
     } else if (output < pid->output_min) {
-        output        = pid->output_min;
-        pid->integral = (double)(pid->output_min - p - pid->d_filtered);
+        output = pid->output_min;
+        if (pid->Ki != 0.0f) {
+            pid->integral = (double)(pid->output_min - p - pid->d_filtered);
+        }
     }
 
     return output;

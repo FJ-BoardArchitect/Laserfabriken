@@ -147,3 +147,5 @@ T   = 298.15 K = 25.0°C ✓
 ## Notering — kalibrering vid idrifttagning
 
 Koefficienterna ovan är beräknade från B-konstanten, som är en approximation av den verkliga NTC-kurvan. För maximal noggrannhet bör koefficienterna uppdateras efter kalibrering mot ett referenstermometer med minst tre mätpunkter vid faktisk drifttemperatur.
+
+Går numera att göra direkt via CLI, utan omkompilering: `set temp.sh_a <val>`, `set temp.sh_b <val>`, `set temp.sh_c <val>` (samt `set temp.vref`/`set temp.rseries` för spänningsdelaren). `status` visar aktuella värden. Sparas till Flash som allt annat (`save`, eller automatiskt 20s efter ändring).

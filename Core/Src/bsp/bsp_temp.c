@@ -36,6 +36,15 @@
  * unconditionally rather than picking one region at compile time. */
 #define ADS1220_FILTER_50_60HZ          0x10u
 
+/* ── NTC calibration (runtime, CLI-adjustable) ──────────────────────────────
+ * Seeded from bsp_config.h's BSP_NTC_* compile-time defaults; overwritten by
+ * Params_Load() if a saved value exists (params.c). */
+float g_ntc_vref_v      = BSP_NTC_VREF_V;
+float g_ntc_rseries_ohm = BSP_NTC_RSERIES_OHM;
+float g_ntc_sh_a        = BSP_NTC_SH_A;
+float g_ntc_sh_b        = BSP_NTC_SH_B;
+float g_ntc_sh_c        = BSP_NTC_SH_C;
+
 /* ── CS helpers ──────────────────────────────────────────────────────────── */
 
 static void ads_cs_low(void)
@@ -101,18 +110,18 @@ static int32_t ads_read_raw(void)
 static float raw_to_resistance(int32_t raw)
 {
     /* Full scale ±(2^23 - 1) = ±VREF with gain=1 and external ref */
-    float voltage = BSP_NTC_VREF_V * ((float)raw / (float)0x7FFFFF);
-    if (voltage <= 0.0f || voltage >= BSP_NTC_VREF_V) return 1e9f;
+    float voltage = g_ntc_vref_v * ((float)raw / (float)0x7FFFFF);
+    if (voltage <= 0.0f || voltage >= g_ntc_vref_v) return 1e9f;
 
-    return BSP_NTC_RSERIES_OHM * voltage / (BSP_NTC_VREF_V - voltage);
+    return g_ntc_rseries_ohm * voltage / (g_ntc_vref_v - voltage);
 }
 
 static float resistance_to_celsius(float r_ohm)
 {
     float ln_r  = logf(r_ohm);
-    float inv_T = BSP_NTC_SH_A
-                + BSP_NTC_SH_B * ln_r
-                + BSP_NTC_SH_C * ln_r * ln_r * ln_r;
+    float inv_T = g_ntc_sh_a
+                + g_ntc_sh_b * ln_r
+                + g_ntc_sh_c * ln_r * ln_r * ln_r;
     return (1.0f / inv_T) - 273.15f;
 }
 

@@ -18,10 +18,16 @@
  *  2. Restore BSP_DRV* macros below
  *  3. Restore BSP_LASER_CS_PORT/PIN
  *  4. Restore BSP_ADC_DRDY_PIN for EXTI-based DRDY in bsp_temp.c
+ *  5. Change BSP_DEVICE_MODE_STR below to "SPUD"
  */
 
+/* Sent to the display once per boot/resync (see cli_sync_display()) so one
+ * shared display firmware binary can show the right UI for whichever board
+ * it's actually plugged into, without the display having to guess. */
+#define BSP_DEVICE_MODE_STR  "UGN"
+
 /* ── CLI terminal — USB CDC ───────────────────────────────────────────────────
- * CLI over USB CDC (PA11/PA12). UART4 (PC10/PC11) is for display.
+ * CLI over USB CDC (PA11/PA12). Display is USART1 (PA9/PA10); PC10/PC11 is SPI3.
  */
 #define BSP_CLI_Send(buf, len)   CDC_Transmit_FS((uint8_t*)(buf), (uint16_t)(len))
 #define BSP_CLI_Receive(pbyte)   CDC_CLI_Receive(pbyte)
@@ -63,6 +69,35 @@
 #define BSP_TEC_POLARITY_PIN    POLARITY_Pin
 #define BSP_TEC_PG_PORT         TEC_PG_GPIO_Port
 #define BSP_TEC_PG_PIN          TEC_PG_Pin
+
+/* ── TEC buck FB-network (for BSP_TEC_EstimateVoltage(), a COMMANDED, not
+ * measured, VOUT estimate -- see bsp_tec.c) ─────────────────────────────────
+ * VOUT = VREF + R14*(VREF/R16 + (VREF-VDAC)/R15), per the M5_TPS563252
+ * schematic sheet (R14 between VOUT and FB, R15 between DACin and FB, R16
+ * between FB and GND).
+ *
+ * Docs/ugn_pinout_and_bringup_status.md §6.1 previously flagged R14 as
+ * possibly misread (150k vs 15k), based on the schematic's two documented
+ * design points (VDAC=0V->VOUT=10.8V, VDAC=2.4V->VOUT=0V) not agreeing on a
+ * consistent internal reference voltage with R15=3.3k/R16=1.2k. Corrected:
+ * it's actually R15 and R16 that were misread by 10x (33k/12k, not
+ * 3.3k/1.2k) -- confirmed by working the same two-design-point check
+ * against these values: both agree to ~1% on an implied reference of
+ * ~0.60V, which independently matches the TPS563252's actual datasheet FB
+ * reference voltage (~0.6V) -- strong, if not bench-measured, confirmation.
+ * R14=150k (as originally read) was correct all along.
+ */
+#define BSP_TEC_FB_R14_OHM   150000.0f
+#define BSP_TEC_FB_R15_OHM   33000.0f
+#define BSP_TEC_FB_R16_OHM   12000.0f
+#define BSP_TEC_FB_VREF_V    0.6f      /* TPS563252 internal FB reference --
+                                         * NOT BSP_NTC_VREF_V, a different,
+                                         * unrelated 2.9V rail (ADS1220 only) */
+
+/* STM32 internal DAC's own reference -- standard STM32G4 default (no VREF+
+ * override configured in dac.c), so DAC full-scale (code 4095) tracks VDDA,
+ * which this board ties to the same 3.3V rail as VDD (M1_TPS62172). */
+#define BSP_DAC_VREF_V        3.3f
 
 /* ── NTC thermistor: Steinhart-Hart coefficients ─────────────────────────────
  * Replace with values from your NTC datasheet or calibration.

@@ -32,10 +32,27 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-#define CDC_RX_RING_SIZE 256u
-static uint8_t  s_rx_ring[CDC_RX_RING_SIZE];
-static uint16_t s_rx_head = 0;
-static uint16_t s_rx_tail = 0;
+#define CDC_RX_RING_SIZE 2048u
+static uint8_t           s_rx_ring[CDC_RX_RING_SIZE];
+static volatile uint16_t s_rx_head = 0;
+static volatile uint16_t s_rx_tail = 0;
+/* Set when CDC_Receive_FS declines to re-arm USBD_CDC_ReceivePacket()
+ * because the ring doesn't have room for another full packet -- the OUT
+ * endpoint stays NAKed (genuine USB-level flow control) until
+ * CDC_CLI_ResumeIfRoom() sees room free up and re-arms it. */
+static volatile uint8_t  s_rx_paused = 0;
+
+/* Set by CDC_Control_FS (USB IRQ context) on any CDC_SEND_BREAK request,
+ * cleared by CDC_TakeBreakFlag() -- the display-flashing bridge's exit
+ * signal (see cli.c). */
+static volatile uint8_t  s_break_pending = 0;
+
+static uint16_t rx_ring_free(void)
+{
+    /* one slot reserved to distinguish full from empty (head==tail) */
+    return (uint16_t)(CDC_RX_RING_SIZE - 1u
+                       - ((s_rx_head - s_rx_tail + CDC_RX_RING_SIZE) % CDC_RX_RING_SIZE));
+}
 
 /* USER CODE END PV */
 
@@ -237,7 +254,16 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SEND_BREAK:
-
+      /* wLength=0 for this request, so per USBD_CDC_Setup() pbuf *is* the
+       * raw setup-packet pointer, not a data buffer (same as
+       * CDC_SET_CONTROL_LINE_STATE above). Treat *any* SEND_BREAK arrival
+       * as the signal, regardless of wValue -- confirmed on real hardware
+       * that Linux's break sequence issues more than one SEND_BREAK
+       * request per ser.send_break() call (0xFFFF=start/0x0000=stop per
+       * the CDC spec), and since we only care about "did a break happen"
+       * rather than start/stop semantics, filtering by value just adds
+       * ambiguity about which request in the sequence to trust. */
+      s_break_pending = 1;
     break;
 
   default:
@@ -267,14 +293,23 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
   for (uint32_t i = 0; i < *Len; i++) {
-      uint16_t next = (s_rx_head + 1u) % CDC_RX_RING_SIZE;
+      uint16_t next = (uint16_t)((s_rx_head + 1u) % CDC_RX_RING_SIZE);
       if (next != s_rx_tail) {
           s_rx_ring[s_rx_head] = Buf[i];
           s_rx_head = next;
       }
   }
+
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  if (rx_ring_free() >= CDC_DATA_FS_MAX_PACKET_SIZE) {
+      USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  } else {
+      /* Not enough room for another full packet -- leave the OUT endpoint
+       * NAKed (don't re-arm). CDC_CLI_ResumeIfRoom() re-arms once draining
+       * frees up room; the host's USB stack retries automatically in the
+       * meantime, nothing is lost. */
+      s_rx_paused = 1;
+  }
   return (USBD_OK);
   /* USER CODE END 6 */
 }
@@ -333,8 +368,36 @@ uint8_t CDC_CLI_Receive(uint8_t *byte)
 {
     if (s_rx_tail == s_rx_head) return 1; /* empty — maps to HAL_TIMEOUT */
     *byte = s_rx_ring[s_rx_tail];
-    s_rx_tail = (s_rx_tail + 1u) % CDC_RX_RING_SIZE;
+    s_rx_tail = (uint16_t)((s_rx_tail + 1u) % CDC_RX_RING_SIZE);
     return 0; /* HAL_OK */
+}
+
+/* Call from the main loop (both the normal CLI drain loop and the
+ * display-flashing bridge relay loop) after draining CDC_CLI_Receive() --
+ * re-arms USBD_CDC_ReceivePacket() once the ring has room for a full
+ * packet again, undoing the NAK CDC_Receive_FS applied when it ran out
+ * of space. Must be called from both drain loops: this is a fix to
+ * CDC_Receive_FS itself, so it affects all USB-CDC traffic, not just
+ * bridge-mode bytes -- if only the bridge loop called this, a ring-fill
+ * during normal (non-flashing) CLI use would NAK the endpoint and never
+ * un-pause it. */
+void CDC_CLI_ResumeIfRoom(void)
+{
+    if (s_rx_paused && rx_ring_free() >= CDC_DATA_FS_MAX_PACKET_SIZE) {
+        s_rx_paused = 0;
+        USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+        USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+    }
+}
+
+/* One-shot: returns 1 if a CDC_SEND_BREAK request has arrived since the
+ * last call, and clears the flag. Used by cli.c's bridge relay loop as
+ * the "stop bridging" exit signal (see CDC_SEND_BREAK case above). */
+uint8_t CDC_TakeBreakFlag(void)
+{
+    uint8_t v = s_break_pending;
+    s_break_pending = 0;
+    return v;
 }
 
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */

@@ -35,6 +35,15 @@ void BSP_TEC_Enable(TecChannel_t ch, uint8_t enable);
  * magnitude maps to the internal DAC amplitude output. */
 void BSP_TEC_SetOutput(TecChannel_t ch);
 
+/* Estimate the crystal buck's COMMANDED output voltage from a normalized PID
+ * output (same [-1.0, +1.0] convention as BSP_TEC_SetOutput()'s input), by
+ * reproducing that function's own DAC-code derivation and then applying the
+ * documented VOUT formula (BSP_TEC_FB_R14/R15/R16_OHM, bsp_config.h).
+ * This is NOT a measured voltage -- there is no current/voltage sensing on
+ * this board -- it's what the firmware is telling the buck to do. Callers
+ * (e.g. the display sync) must label it accordingly, not as a real reading. */
+float BSP_TEC_EstimateVoltage(float normalized_output);
+
 /* Zero the output and disable the buck converter. */
 void BSP_TEC_Disable(TecChannel_t ch);
 
