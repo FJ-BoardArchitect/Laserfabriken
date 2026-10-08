@@ -113,7 +113,7 @@ void BSP_TEC_SetOutput(TecChannel_t ch)
         if (value < 0.0f) {
             value = -value; // Make value positive for DAC calculation
         }
-        if (value > 0.5f) value = 0.5f;
+        if (value > 1.0f) value = 1.0f;
 
         dac_code = 4095u - (uint16_t)(value * 4095.0f);
         BSP_TEC_SetRawDAC(dac_code);

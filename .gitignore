@@ -16,6 +16,8 @@ build/
 *.hex
 *.map
 
+*.pyc
+
 # stlink dev-testing tools (--target=stlink only, not customer-facing --
 # see Tools/firmware-updater/FIRMWARE_UPDATER.md §5/§8) -- kept locally
 # for convenience, deliberately not git-tracked like dist/'s dfu-util.exe is
