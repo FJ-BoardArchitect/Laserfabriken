@@ -69,28 +69,30 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define TEC_PG_Pin GPIO_PIN_2
-#define TEC_PG_GPIO_Port GPIOA
-#define DAC_CS_Pin GPIO_PIN_3
-#define DAC_CS_GPIO_Port GPIOA
-#define ADC_CS_Pin GPIO_PIN_4
-#define ADC_CS_GPIO_Port GPIOA
-#define TEC_EN_Pin GPIO_PIN_5
-#define TEC_EN_GPIO_Port GPIOC
-#define M6_EN_Pin GPIO_PIN_0
-#define M6_EN_GPIO_Port GPIOB
-#define DISPLAY_DO1_Pin GPIO_PIN_13
+#define DISPLAY_RX_Pin GPIO_PIN_0
+#define DISPLAY_RX_GPIO_Port GPIOC
+#define DISPLAY_TX_Pin GPIO_PIN_1
+#define DISPLAY_TX_GPIO_Port GPIOC
+#define DISPLAY_DO3_Pin GPIO_PIN_2
+#define DISPLAY_DO3_GPIO_Port GPIOA
+#define DISPLAY_DO2_Pin GPIO_PIN_5
+#define DISPLAY_DO2_GPIO_Port GPIOC
+#define DISPLAY_DO1_Pin GPIO_PIN_0
 #define DISPLAY_DO1_GPIO_Port GPIOB
-#define DISPLAY_DO2_Pin GPIO_PIN_14
-#define DISPLAY_DO2_GPIO_Port GPIOB
-#define DISPLAY_DO3_Pin GPIO_PIN_15
-#define DISPLAY_DO3_GPIO_Port GPIOB
-#define POLARITY_Pin GPIO_PIN_6
-#define POLARITY_GPIO_Port GPIOC
-#define DISPLAY_TX_Pin GPIO_PIN_9
-#define DISPLAY_TX_GPIO_Port GPIOA
-#define DISPLAY_RX_Pin GPIO_PIN_10
-#define DISPLAY_RX_GPIO_Port GPIOA
+#define TEC_IMEAS_Pin GPIO_PIN_1
+#define TEC_IMEAS_GPIO_Port GPIOB
+#define TEC_VMEAS_Pin GPIO_PIN_2
+#define TEC_VMEAS_GPIO_Port GPIOB
+#define M6_EN_Pin GPIO_PIN_10
+#define M6_EN_GPIO_Port GPIOB
+#define POLARITY_Pin GPIO_PIN_11
+#define POLARITY_GPIO_Port GPIOB
+#define ADC_CS_Pin GPIO_PIN_12
+#define ADC_CS_GPIO_Port GPIOB
+#define TEC_EN_Pin GPIO_PIN_6
+#define TEC_EN_GPIO_Port GPIOC
+#define TEC_PG_Pin GPIO_PIN_7
+#define TEC_PG_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 

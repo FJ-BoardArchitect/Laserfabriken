@@ -204,17 +204,7 @@ __ALIGN_BEGIN static uint8_t USBD_CDC_CfgHSDesc[USB_CDC_CONFIG_DESC_SIZ] __ALIGN
   0x04,                                       /* bFunctionLength */
   0x24,                                       /* bDescriptorType: CS_INTERFACE */
   0x02,                                       /* bDescriptorSubtype: Abstract Control Management desc */
-  0x06,                                       /* bmCapabilities -- D1 (line coding/control
-                                                * line state) | D2 (Send_Break). Stock ST
-                                                * template only set D1 (0x02); D2 added
-                                                * because Linux's cdc_acm driver checks this
-                                                * capability bit before issuing a real
-                                                * CDC_SEND_BREAK request -- with D2 clear, it
-                                                * silently never sends one at all, no error,
-                                                * confirmed on real hardware (a firmware-side
-                                                * break-request counter stayed at 0 across
-                                                * repeated ser.send_break() calls). See
-                                                * display-flashing bridge in cli.c. */
+  0x02,                                       /* bmCapabilities */
 
   /* Union Functional Descriptor */
   0x05,                                       /* bFunctionLength */
@@ -314,17 +304,7 @@ __ALIGN_BEGIN static uint8_t USBD_CDC_CfgFSDesc[USB_CDC_CONFIG_DESC_SIZ] __ALIGN
   0x04,                                       /* bFunctionLength */
   0x24,                                       /* bDescriptorType: CS_INTERFACE */
   0x02,                                       /* bDescriptorSubtype: Abstract Control Management desc */
-  0x06,                                       /* bmCapabilities -- D1 (line coding/control
-                                                * line state) | D2 (Send_Break). Stock ST
-                                                * template only set D1 (0x02); D2 added
-                                                * because Linux's cdc_acm driver checks this
-                                                * capability bit before issuing a real
-                                                * CDC_SEND_BREAK request -- with D2 clear, it
-                                                * silently never sends one at all, no error,
-                                                * confirmed on real hardware (a firmware-side
-                                                * break-request counter stayed at 0 across
-                                                * repeated ser.send_break() calls). See
-                                                * display-flashing bridge in cli.c. */
+  0x02,                                       /* bmCapabilities */
 
   /* Union Functional Descriptor */
   0x05,                                       /* bFunctionLength */
@@ -419,17 +399,7 @@ __ALIGN_BEGIN static uint8_t USBD_CDC_OtherSpeedCfgDesc[USB_CDC_CONFIG_DESC_SIZ]
   0x04,                                       /* bFunctionLength */
   0x24,                                       /* bDescriptorType: CS_INTERFACE */
   0x02,                                       /* bDescriptorSubtype: Abstract Control Management desc */
-  0x06,                                       /* bmCapabilities -- D1 (line coding/control
-                                                * line state) | D2 (Send_Break). Stock ST
-                                                * template only set D1 (0x02); D2 added
-                                                * because Linux's cdc_acm driver checks this
-                                                * capability bit before issuing a real
-                                                * CDC_SEND_BREAK request -- with D2 clear, it
-                                                * silently never sends one at all, no error,
-                                                * confirmed on real hardware (a firmware-side
-                                                * break-request counter stayed at 0 across
-                                                * repeated ser.send_break() calls). See
-                                                * display-flashing bridge in cli.c. */
+  0x02,                                       /* bmCapabilities */
 
   /*Union Functional Descriptor*/
   0x05,                                       /* bFunctionLength */

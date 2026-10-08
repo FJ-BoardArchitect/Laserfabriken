@@ -18,10 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "dac.h"
-#include "spi.h"
-#include "ucpd.h"
 #include "usart.h"
+#include "ucpd.h"
 #include "usb_device.h"
 #include "gpio.h"
 
@@ -94,11 +92,9 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DAC1_Init();
-  MX_SPI3_Init();
-  MX_USART1_UART_Init();
   MX_USB_Device_Init();
   MX_UCPD1_Init();
+  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
   /* Enable the STM32's internal VREFBUF and drive it out on VREF+, which is
    * wired on this board to the ADS1220's REFP0 (net "V2.9"). Without this,
