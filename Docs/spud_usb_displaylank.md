@@ -1,7 +1,7 @@
 # SPUD — USB-länk mellan STM32 och display
 
-**Status:** designunderlag, inget implementerat än
-**Datum:** 2026-10-08 (ersätter utkastet från 2026-10-06)
+**Status:** proof of concept verifierad på UGN 2026-10-09 (se §11). Länken, protokollet och 5V-styrningen via CC fungerar på riktig hårdvara; SPUD-specifik hårdvara (§3.2) återstår.
+**Datum:** 2026-10-08, uppdaterad 2026-10-09 (ersätter utkastet från 2026-10-06)
 **Kodbas:** gren `usb-c-Test`, skapad från `origin/dev_fj` 2026-10-08 (den firmware som sitter på UGN-kortet). `main` saknar sex commits från `dev_fj`.
 **Gäller:** SPUD-kortet (nästa kort efter UGN) och `Laserfabriken_Display`
 
@@ -43,8 +43,8 @@ Datorn matar alltid sin egen 5V på VBUS. Om SPUD också driver 5V på samma led
 
 ### 3.1 Så avgörs det
 
-- **Displayen** har pull-downs (Rd) på CC — det har alla ESP32-moduler, de är byggda som devices. Rd betyder "jag vill ha ström".
-- **En dator** har pull-ups (Rp) på CC och matar 5V. Rp betyder "jag ger ström".
+- **Displayen** har pull-downs (Rd) på CC — det har alla ESP32-moduler, de är byggda som devices. Rd betyder "jag vill ha ström". *Verifierat på UGN 2026-10-09.*
+- **En dator** har pull-ups (Rp) på CC och matar 5V. Rp betyder "jag ger ström". Med en **USB-A-till-C-kabel** sitter Rp (56 kΩ) i kabeln och datorns USB-A-port lägger på 5V direkt, utan att fråga. *Verifierat på UGN 2026-10-09: STM32 ser kabelns Rp som "default USB power".*
 - **SPUD:s port är DRP (Dual Role Port) på CC-nivå, utan PD.** Den växlar mellan att erbjuda (Rp) och fråga (Rd):
   - Ser den displayens Rd → SPUD blir Source → **5V-brytaren på**.
   - Ser den datorns Rp → SPUD blir Sink → **5V-brytaren av**.
@@ -55,20 +55,20 @@ Datarollen påverkas inte av detta. STM32 är device i båda fallen.
 ### 3.2 Hårdvara på SPUD
 
 1. **5V-lastbrytare** från kortets 5V-regulator till kontaktens VBUS, **med backströmsskydd** (reverse-current blocking), så att en dators 5V aldrig kan läcka in i kortet om brytaren är av.
-2. **CC-logik för DRP utan PD.** Två alternativ:
-   - **UCPD1** (redan på PB4/PB6) med ST:s USBPD-middleware i Type-C-only-läge (ingen policy engine). Färre komponenter, mer firmware.
-   - **Extern CC-krets** utan PD, t.ex. TUSB320, som rapporterar utfallet på en statuspinne. Mindre firmware, en komponent till. UCPD-pinnarna blir då lediga.
-3. **VBUS-sense** (spänningsdelare till en GPIO). Säkerhetskontroll innan 5V-brytaren slås på, och den enda signalen som säger "dator inkopplad" innan något har enumererats.
+2. **CC-logik för DRP utan PD: STM32:s egen UCPD1 (PB4/PB6), styrd av egen firmware (`usbc_port.c`).** Beslut 2026-10-09, ersätter alternativen "ST:s USBPD-middleware" och "extern TUSB320". Ingen extra komponent och ingen middleware: UCPD används bara som Rp/Rd-växlare med spänningskomparatorer, och vår egen tillståndsmaskin växlar roller. Verifierat på UGN (§11). Eftersom vi äger tillståndsmaskinen kan Try.SNK (§3.3) läggas in i firmware — det var den saknade Try.SNK-funktionen i ST:s middleware som tidigare pekade mot TUSB320.
+3. **VBUS-sense** (spänningsdelare till en GPIO). Säkerhetskontroll innan 5V-brytaren slås på. Saknas på UGN; där räcker CC-detekteringen, men på SPUD ska 5V aldrig slås på om VBUS redan bär spänning (t.ex. en felaktig kabel utan Rp).
+4. **Strömväg från USB när kortet saknar egen matning.** Utan barrel-jack ska en dator kunna mata kortet (CLI, firmwareuppdatering), med barrel-jack ska kortet inte dra ström från datorn. Lös med en ideal-diod/power-mux (t.ex. TPS2121 med barrel som prioriterad källa, eller LM66100-par) in på kortets matning. På UGN sker detta av en slump: datorns 5V når kortet baklänges genom 5V-regulatorn, vilket fungerar men inte är en konstruktion.
+5. **Barrel-detekt till en GPIO.** Utan barrel-jack räcker USB-strömmen (0,5–1,5 A vid 5V) inte till TEC eller laser. Firmware ska då vägra `laser on` och TEC-enable.
 
 ### 3.3 Fallgrop: datorer som också är DRP
 
 De flesta bärbara har DRP-portar. Om båda sidor växlar avgör slumpen vem som blir Source. Blir SPUD Source mot en bärbar blir datorn Sink — och i en bärbars värld betyder det att den försöker bli *device*. Då finns ingen host på bussen och CLI:t är dött.
 
-Type-C-specen löser det med **Try.SNK**: SPUD föredrar Sink när motparten också är DRP, men blir Source när motparten är ren Sink (displayen). **Välj CC-lösning som stödjer Try.SNK och slå på det.** Kontrollera detta i databladet (TUSB320) eller middleware-konfigurationen (UCPD) innan beslut.
+Type-C-specen löser det med **Try.SNK**: SPUD föredrar Sink när motparten också är DRP, men blir Source när motparten är ren Sink (displayen). **Implementeras i `usbc_port.c`:** när porten som Source ser Rd, presentera Rd en kort stund (tDRPTry, ~100 ms) innan 5V slås på. En DRP-dator visar då Rp och SPUD blir Sink; displayen (ren Sink) visar aldrig Rp och SPUD återgår till Source. **Ej testat än:** UGN-testet gjordes med USB-A-kabel, där datorn är ren Source och problemet inte uppstår. Behöver testas med en C-till-C-kabel mot en bärbar med DRP-port.
 
 ### 3.4 Displayens sida
 
-Inget behöver ändras i displayens hårdvara. Dess USB-C-kontakt har redan Rd, tar emot 5V och ger ESP32:n D+/D−. Det som försvinner är FPC-kabeln och boot-strap-styrningen (`DISPLAY_DO1/2/3`): displayen bootar fristående på sina egna strap-pull-ups, som alla ESP32-moduler.
+Inget behöver ändras i displayens hårdvara. Dess USB-C-kontakt har redan Rd, tar emot 5V och ger ESP32:n D+/D−. Displayen (JC3636K718) har ingen batterimatning i vår uppställning: den lever helt på 5V från kortet (verifierat: den släcks när kortets 5V slås av). Utan barrel-jack på SPUD fungerar alltså inte displayen. Det som försvinner är FPC-kabeln och boot-strap-styrningen (`DISPLAY_DO1/2/3`): displayen bootar fristående på sina egna strap-pull-ups, som alla ESP32-moduler.
 
 ---
 
@@ -147,11 +147,13 @@ laser on | laser off
 
 ## 6. Firmware-flöde på STM32 (SPUD)
 
-1. Boot: USB-device-stacken startar som i dag. CC-logiken börjar DRP-växla. 5V-brytaren är **av**.
+1. Boot: USB-device-stacken startar som i dag. CC-logiken börjar DRP-växla (50 ms per roll). 5V-brytaren är **av** — även GPIO:ns startnivå i CubeMX är låg, och brytaren behöver en pull-down så att den är av medan STM32 är i reset eller flashas.
 2. **Display ansluten (CC ser Rd):** kontrollera att VBUS-sense är låg (ingen främmande 5V) → slå på 5V-brytaren → displayen bootar → dess host-stack enumererar STM32 → CDC öppnas → `hello` kommer → kanalen går till maskinläge → svara `hello` + fullt tillstånd.
 3. **Dator ansluten (CC ser Rp, VBUS-sense hög):** 5V-brytaren förblir av → datorn enumererar STM32 → CLI i människoläge som i dag. ROM-bootloaderns DFU fungerar oförändrat.
 4. **Kabel ur:** CC öppen → 5V-brytaren av → USB-stacken ser suspend/reset → kanalen återställs till människoläge vid nästa enumerering.
-5. Hamnar porten i fel roll mot en DRP-dator (§3.3) hjälper inte firmware — det måste Try.SNK i CC-lösningen lösa.
+5. DRP-dator (§3.3): Try.SNK i `usbc_port.c` innan 5V slås på.
+
+Steg 1–4 är implementerade och verifierade på UGN (§11); steg 5 återstår.
 
 ---
 
@@ -168,8 +170,8 @@ Gemensamt för båda korten (kan göras och testas på UGN i dag mot en PC-termi
 
 Bara SPUD (`bsp_config.h`-val):
 - Displaykanalen pekar på USB-kanalen i stället för USART1. USART1 och `DISPLAY_DO1/2/3` tas bort ur `.ioc`.
-- Två nya GPIO: 5V-brytarens enable och VBUS-sense. Plus eventuell statuspinne från extern CC-krets. Bestäm dem samtidigt som ADC_CS flyttas från PA4 (README §3.1), pinbudgeten är trång.
-- CC-logik: ST:s USBPD-middleware (Type-C-only, DRP, Try.SNK) på UCPD1, eller avläsning av extern CC-krets.
+- Tre nya GPIO: 5V-brytarens enable, VBUS-sense och barrel-detekt. Bestäm dem samtidigt som ADC_CS flyttas från PA4 (README §3.1), pinbudgeten är trång.
+- CC-logik: `usbc_port.c` (finns, UCPD1 utan middleware) + Try.SNK. `BSP_USBC_VBUS_EN_PORT/PIN` pekas om från M6_EN till den nya brytarens enable.
 
 ### Display (`Laserfabriken_Display`)
 
@@ -202,9 +204,10 @@ Protokollförbättringarna i §5 (hello, `get all`, setter-roll, inget boot-race
 
 ## 9. Öppna frågor
 
-- [ ] CC-lösning: UCPD1 + ST:s USBPD-middleware, eller extern krets (TUSB320)? Avgör pinbudget och firmware-omfång.
-- [ ] Stödjer vald CC-lösning Try.SNK? (Måste, se §3.3.)
-- [ ] Vilka GPIO får 5V-brytarens enable och VBUS-sense? Bestäm tillsammans med ADC_CS-flytten.
+- [x] CC-lösning: UCPD1 med egen firmware (beslut 2026-10-09, §3.2).
+- [ ] Try.SNK i `usbc_port.c`, och test mot en DRP-bärbar med C-till-C-kabel (§3.3).
+- [ ] Vilka GPIO får 5V-brytarens enable, VBUS-sense och barrel-detekt? Bestäm tillsammans med ADC_CS-flytten.
+- [ ] Strömväg USB/barrel (§3.2 punkt 4): TPS2121 eller diod-OR?
 - [ ] Fungerar `usb_host`-API:t från Arduino-kärnan i praktiken, eller krävs ESP-IDF direkt? Avgörs i steg 2 nedan.
 - [ ] VID/PID: eget internt par, eller ansökan (pid.codes för öppna projekt)?
 - [ ] Protokollversion: räcker `proto=1` med "ignorera okända rader", eller behövs en lista över vilka rader varje version garanterar?
@@ -214,3 +217,29 @@ Protokollförbättringarna i §5 (hello, `get all`, setter-roll, inget boot-race
 1. STM32: kanalabstraktion, hello/`get all`/`stream`, descriptorer. Testas på UGN mot PC-terminal, utan ny hårdvara.
 2. Display: transportlager + host-stack. Testas mot UGN-kortet via C-till-C-kabel.
 3. Först därefter fryses SPUD-schemat — steg 2 är det som visar om host-vägen på displayen håller.
+
+---
+
+## 11. Verifierat på UGN (2026-10-09)
+
+Proof of concept på befintligt UGN-kort, utan omlödning. Uppställning: barrel-jack in, display (ESP32-S3) ansluten **bara** via USB-C-kabel till UGN:s USB-C, ST-Link på ProgPAD.
+
+**Hårdvarufakta som mättes fram:**
+- 5V på UGN:s USB-C VBUS kommer från 5V-regulatorn M6, som STM32 slår av/på med PB0 (`M6_EN`). Ingen backströmsspärr finns mellan VBUS och 5V-skenan.
+- UCPD1:s CC-pinnar (PB4/PB6) är kopplade till kontakten. Som Source ser STM32 displayens Rd; som Sink ser den USB-A-kabelns Rp.
+- Utan barrel-jack matar en dator (USB-A) hela kortet baklänges genom 5V-regulatorn; STM32 startar och enumereras.
+- HiAx-schemat för UGN är inte uppdaterat och ska inte användas som referens för strömvägar.
+
+**Funktion som verifierats:**
+
+| Test | Resultat |
+|---|---|
+| Displayen som USB-host enumererar STM32 (VID 0x1209, PID 0x0001) | ✅ |
+| Hello-handskakning, fullt tillstånd efter hello, `get all` | ✅ |
+| Rattvridning på displayen → STM32:s börvärde följer i realtid | ✅ |
+| Börvärde satt på STM32 → displayen följer | ✅ |
+| Auktoritativt svar: `set laser.power 150` → `set laser.power 100` | ✅ |
+| Dator (USB-A) → STM32, CLI i människoläge och lägesbyte via hello | ✅ |
+| Automatisk 5V: display in → 5V på, ur → 5V av, dator in → 5V förblir av | ✅ (live, båda kontaktvändningarna) |
+
+**Inte verifierat / kvar till SPUD:** Try.SNK mot DRP-dator, backströmsspärr, 5V-läget under reset/flashning, strömväg och barrel-detekt (§3.2 punkt 4–5).
