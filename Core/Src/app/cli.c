@@ -224,6 +224,7 @@ static void cli_send_bin(cli_chan_t *ch, const uint8_t *data, uint16_t len)
  * below can call it. */
 static void cli_force_display_resync(void);
 static void send_state(cli_chan_t *ch);
+static void confirm(cli_chan_t *ch, const char *key);
 
 /* ── Bridge mode (ESP32 display firmware update) ────────────────────────────
  * Relays raw bytes between the PC (USB-CDC) and the ESP32's UART while it's
@@ -575,7 +576,8 @@ static void process_line(cli_chan_t *ch, char *line)
         // cli_send(ch, "OK laser enabled\r\n
         BSP_TEC_Enable(TEC_CRYSTAL, 1);
         BSP_TEC_Reset(TEC_CRYSTAL);
-        cli_send(ch, "OK crystal TEC enabled\r\n");
+        if (ch->machine) { confirm(ch, "laser"); confirm(ch, "crystal.tec"); }
+        else cli_send(ch, "OK crystal TEC enabled\r\n");
         return;
     }
     if (strcmp(line, "laser off") == 0) {
@@ -583,7 +585,8 @@ static void process_line(cli_chan_t *ch, char *line)
         Laser_Control_Disable();
         // cli_send(ch, "OK laser disabled\r\n");
         BSP_TEC_Enable(TEC_CRYSTAL, 0);
-        cli_send(ch, "OK crystal TEC disabled\r\n");
+        if (ch->machine) { confirm(ch, "laser"); confirm(ch, "crystal.tec"); }
+        else cli_send(ch, "OK crystal TEC disabled\r\n");
         return;
     }
 
@@ -591,12 +594,14 @@ static void process_line(cli_chan_t *ch, char *line)
     if (strcmp(line, "crystal.tec on") == 0) {
         BSP_TEC_Enable(TEC_CRYSTAL, 1);
         BSP_TEC_Reset(TEC_CRYSTAL);
-        cli_send(ch, "OK crystal TEC enabled\r\n");
+        if (ch->machine) confirm(ch, "crystal.tec");
+        else cli_send(ch, "OK crystal TEC enabled\r\n");
         return;
     }
     if (strcmp(line, "crystal.tec off") == 0) {
         BSP_TEC_Enable(TEC_CRYSTAL, 0);
-        cli_send(ch, "OK crystal TEC disabled\r\n");
+        if (ch->machine) confirm(ch, "crystal.tec");
+        else cli_send(ch, "OK crystal TEC disabled\r\n");
         return;
     }
     if (strcmp(line, "laser off") == 0) {
@@ -608,20 +613,22 @@ static void process_line(cli_chan_t *ch, char *line)
     /* 5v on / 5v off */
     if (strcmp(line, "5v on") == 0) {
         if (s_bridge_active || s_bridge_seq_state != BRIDGE_SEQ_NONE) {
-            cli_send(ch, "ERR: busy\r\n");
+            if (ch->machine) confirm(ch, "5v"); else cli_send(ch, "ERR: busy\r\n");
             return;
         }
         HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_SET);
-        cli_send(ch, "OK 5V output enabled\r\n");
+        if (ch->machine) confirm(ch, "5v");
+        else cli_send(ch, "OK 5V output enabled\r\n");
         return;
     }
     if (strcmp(line, "5v off") == 0) {
         if (s_bridge_active || s_bridge_seq_state != BRIDGE_SEQ_NONE) {
-            cli_send(ch, "ERR: busy\r\n");
+            if (ch->machine) confirm(ch, "5v"); else cli_send(ch, "ERR: busy\r\n");
             return;
         }
         HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_RESET);
-        cli_send(ch, "OK 5V output disabled\r\n");
+        if (ch->machine) confirm(ch, "5v");
+        else cli_send(ch, "OK 5V output disabled\r\n");
         return;
     }
 
@@ -714,8 +721,9 @@ static void process_line(cli_chan_t *ch, char *line)
              * value afterward. */
             TEC_Crystal_SetWavelength(val);
 
-            cli_sendf(ch, "OK crystal.wavelength = %.2f nm  -> SP=%.4f C\r\n",
-                      (double)val, (double)g_crystal_pid.setpoint);
+            if (ch->machine) confirm(ch, "crystal.setpoint");
+            else cli_sendf(ch, "OK crystal.wavelength = %.2f nm  -> SP=%.4f C\r\n",
+                           (double)val, (double)g_crystal_pid.setpoint);
             Params_MarkDirty();
             return;
         }
@@ -801,8 +809,9 @@ static void process_line(cli_chan_t *ch, char *line)
         if (strcmp(param, "laser.power") == 0) {
             uint8_t pct = (val < 0.0f) ? 0u : (val > 100.0f) ? 100u : (uint8_t)val;
             Laser_Control_SetPower(pct);
-            cli_sendf(ch, "OK laser.power = %u%%  -> I=%.4f A\r\n",
-                      (unsigned)pct, (double)Laser_Control_GetState()->current_A);
+            if (ch->machine) confirm(ch, "laser.power");
+            else cli_sendf(ch, "OK laser.power = %u%%  -> I=%.4f A\r\n",
+                           (unsigned)pct, (double)Laser_Control_GetState()->current_A);
             Params_MarkDirty();
             return;
         }
@@ -856,7 +865,8 @@ static void process_line(cli_chan_t *ch, char *line)
             PID_Reset(pid); /* reset integral when setpoint changes */
             if (pid == &g_laser_pid)
                 TEC_LaserTempGuard_Reset();
-            cli_sendf(ch, "OK %s = %.4f C (integral reset)\r\n", param, (double)val);
+            if (ch->machine && pid == &g_crystal_pid) confirm(ch, "crystal.setpoint");
+            else cli_sendf(ch, "OK %s = %.4f C (integral reset)\r\n", param, (double)val);
             Params_MarkDirty();
         } else {
             cli_send(ch, "ERR: unknown parameter\r\n");
@@ -947,6 +957,29 @@ static void send_state(cli_chan_t *ch)
     cli_sendf(ch, "crystal.temp %.4f\r\n", (double)temp);
     cli_sendf(ch, "crystal.output %.4f\r\n", (double)output);
     cli_sendf(ch, "crystal.tec_voltage %.2f\r\n", (double)BSP_TEC_EstimateVoltage(output));
+}
+
+/* Machine-mode reply to a command that changes display state: the
+ * authoritative value as a protocol line, so the display shows what the
+ * STM32 actually applied (clamped, rounded, refused) rather than what it
+ * asked for. The diff sync would push a changed value anyway within 50 ms;
+ * this covers the unchanged/refused case and answers at once. Human mode
+ * keeps its "OK ..." text; callers pick one or the other. */
+static void confirm(cli_chan_t *ch, const char *key)
+{
+    if (strcmp(key, "laser.power") == 0) {
+        cli_sendf(ch, "set laser.power %u\r\n", (unsigned)Laser_Control_GetState()->power_pct);
+    } else if (strcmp(key, "crystal.setpoint") == 0) {
+        float wavelength = g_crystal_wl_k * g_crystal_pid.setpoint + g_crystal_wl_m;
+        cli_sendf(ch, "crystal.setpoint %.4f\r\n", (double)g_crystal_pid.setpoint);
+        cli_sendf(ch, "set crystal.wavelength %.2f\r\n", (double)wavelength);
+    } else if (strcmp(key, "laser") == 0) {
+        cli_send(ch, Laser_Control_GetState()->enabled ? "laser on\r\n" : "laser off\r\n");
+    } else if (strcmp(key, "5v") == 0) {
+        cli_send(ch, HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET ? "5v on\r\n" : "5v off\r\n");
+    } else if (strcmp(key, "crystal.tec") == 0) {
+        cli_send(ch, HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET ? "crystal.tec on\r\n" : "crystal.tec off\r\n");
+    }
 }
 
 static void cli_sync_display(void)

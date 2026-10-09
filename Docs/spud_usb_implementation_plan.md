@@ -1,6 +1,6 @@
 # SPUD USB-länk — implementationsplan
 
-**Status (2026-10-09):** steg 0–3 klara och verifierade på UGN. Displayen enumererar STM32 över USB, handskakningen går igenom, STM32 skickar hela tillståndet efter hello, och rattvridningar på displayen landar i STM32 (setpoint följdes i realtid via SWD-konsolen). PC-terminal-test går inte på UGN: 5V är hårdkopplad till USB-C-kontakten. Öppet: displayens logg över UART0/FPC når inte STM32 (RX-pinnen flyter), parkerat.
+**Status (2026-10-09):** steg 0–3 och 6 klara och verifierade på UGN; steg 4–5 fungerar i grunden (displayen visar värden över USB och skickar rattvridningar) men displayens frånkopplingsläge och "svaret vinner"-beteendet är inte gjorda. Displayen enumererar STM32 över USB, handskakningen går igenom, STM32 skickar hela tillståndet efter hello, och rattvridningar på displayen landar i STM32 (setpoint följdes i realtid via SWD-konsolen). PC-terminal-test går inte på UGN: 5V är hårdkopplad till USB-C-kontakten. Öppet: displayens logg över UART0/FPC når inte STM32 (RX-pinnen flyter), parkerat.
 **Datum:** 2026-10-08
 **Design:** `spud_usb_displaylank.md` (läs den först)
 **Repon:** `Laserfabriken` (STM32, gren `usb-c-Test` från `origin/dev_fj`) och `Laserfabriken_Display` (ESP32-S3)
@@ -172,7 +172,7 @@ Displayen ska sitta i STM32-kortets USB-C med en C-till-C-kabel. På **UGN** är
 
 **Test (UGN, PC-terminal som spelar display):** `hello display fw=1.0.0 proto=1` → hello + hela dumpen. `get all` → samma dump. `stream 500` → två rader varannan halvsekund; `stream off` tystnar. I människoläge: `get all` ger samma rader, `status` oförändrat.
 
-## Steg 4 — ESP32: visa värdena
+## Steg 4 — ESP32: visa värdena ◐ (värden visas över USB sedan 2026-10-09; frånkopplingsläget återstår)
 
 - `drain_stm_uart()` läser från `stm_link_read()` i stället för `SerialSTM`. `process_stm_line()` oförändrad.
 - Hello-svaret tolkas: `hello UGN ...` → `g_ui_mode = MODE_UGN`, `hello SPUD ...` → `MODE_SPUD`, `g_mode_known = 1`. Ersätter den periodiska `set device.mode`-raden. (Behåll den i parsern tills UART-vägen på UGN är avvecklad.)
@@ -180,12 +180,14 @@ Displayen ska sitta i STM32-kortets USB-C med en C-till-C-kabel. På **UGN** är
 
 **Test:** displayen visar samma värden som `status` i en terminal på UGN (kör terminalen via UART-debug eller kontrollera i tur och ordning). Ändra `set laser.power` på STM32 → displayen följer. Dra ur/sätt i → displayen går till "ingen kontroller" och tillbaka med rätt värden.
 
-## Steg 5 — ESP32 → STM32: skicka värden
+## Steg 5 — ESP32 → STM32: skicka värden ◐ (sändningen fungerar sedan 2026-10-09; "svaret vinner" i UI:t återstår)
 
 - `send_power()`, `send_wavelength()`, `send_crystal_setpoint()`, `send_laser_state()`, `send_crystal_tec_state()` skriver via `stm_link_write()`. Samma strängar som i dag.
 - Displayen ändrar **inte** sitt visade värde när den skickar; den väntar på STM32:s rad (steg 6). Ratt/touch uppdaterar ett "önskat" värde som skickas, UI:t uppdateras från svaret. (Undantag kan behövas för rattens känsla — testa; om det känns segt, uppdatera lokalt men låt svaret vinna.)
 
-## Steg 6 — STM32: ta emot och bekräfta
+## Steg 6 — STM32: ta emot och bekräfta ✅ (verifierat 2026-10-09)
+
+*`confirm(ch, key)` i `cli.c`: i maskinläge svarar `set laser.power`, `set crystal.setpoint`, `set crystal.wavelength`, `laser on|off`, `5v on|off`, `crystal.tec on|off` med den auktoritativa protokollraden (klampat värde, verkligt pinläge). Människoläge behåller `OK ...`-texten. Verifierat: `set laser.power 150` ger `set laser.power 100` tillbaka.*
 
 - I maskinläge svarar varje `set`, `laser on/off`, `5v on/off` med motsvarande tillståndsrad till **avsändaren** (samma rader som i steg 3). I människoläge som i dag (`OK ...`).
 - Avvisade värden (t.ex. `laser.power 150`) svarar med det **faktiska** värdet, så displayen rättar sig.
