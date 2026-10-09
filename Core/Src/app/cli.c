@@ -170,13 +170,17 @@ static cli_chan_t s_rtt = { RTT_ReadByte, rtt_send, false, false, {0}, 0 };
 #endif
 
 /* The channel the display is on right now, or NULL if no display is
- * connected (SPUD: USB channel still in human mode). */
+ * connected (SPUD: USB channel still in human mode). On UGN a display that
+ * has said hello over USB wins over the UART, so the USB link can be bench-
+ * tested on UGN hardware with the FPC still attached. */
 static cli_chan_t *disp_chan(void)
 {
+    if (s_usb.machine)
+        return &s_usb;
 #ifdef BSP_DISPLAY_LINK_UART
     return &s_uart;
 #else
-    return s_usb.machine ? &s_usb : NULL;
+    return NULL;
 #endif
 }
 
@@ -392,6 +396,17 @@ static void process_line(cli_chan_t *ch, char *line)
         line[--len] = '\0';
 
     if (len == 0) return;
+
+#if defined(CLI_RTT) && defined(BSP_DISPLAY_LINK_UART)
+    /* Debug: mirror everything the display UART delivers onto the SWD
+     * console. With the display in USB-host mode its Serial log (UART0,
+     * GPIO43/44) lands here, so this is the display's log viewer. */
+    if (ch == &s_uart)
+        cli_sendf(&s_rtt, "[disp] %s\r\n", line);
+#endif
+    /* '#' lines are comments/log output (the display's stm_link_log()),
+     * never commands -- on any channel. */
+    if (line[0] == '#') return;
 
     /* hello -- the display's handshake (Docs/spud_usb_displaylank.md §4).
      *   display -> STM32:  hello display fw=<ver> proto=<n>
