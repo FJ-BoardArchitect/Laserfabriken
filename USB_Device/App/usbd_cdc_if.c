@@ -23,6 +23,7 @@
 
 /* USER CODE BEGIN INCLUDE */
 #include <string.h>
+#include "cli.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -177,6 +178,12 @@ static int8_t CDC_Init_FS(void)
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  /* Runs on every SET_CONFIGURATION, i.e. every time a host (PC or
+   * display) enumerates us. Forget anything a previous host left in the
+   * ring and tell the CLI to start this host in terminal mode. */
+  s_rx_head = s_rx_tail = 0;
+  s_rx_paused = 0;
+  CLI_OnUsbEnumerated();
   return (USBD_OK);
   /* USER CODE END 3 */
 }

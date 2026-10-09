@@ -27,6 +27,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN Includes */
+#include "fw_version.h"
 
 /* USER CODE END Includes */
 
@@ -66,6 +67,15 @@ extern USBD_DescriptorsTypeDef CDC_Desc;
 void MX_USB_Device_Init(void)
 {
   /* USER CODE BEGIN USB_Device_Init_PreTreatment */
+  /* Stamp the firmware version into the device descriptor's bcdDevice
+   * field (bytes 12..13, little-endian BCD 0xJJMN). The descriptor array
+   * itself is CubeMX-generated with a fixed 2.00, so it is patched here in
+   * a USER CODE block rather than in usbd_desc.c, where a "Generate Code"
+   * run would silently reset it. The stack reads the array by pointer at
+   * enumeration time, so patching it before USBD_Start() is sufficient. */
+  extern uint8_t USBD_CDC_DeviceDesc[];
+  USBD_CDC_DeviceDesc[12] = (uint8_t)(FW_VERSION_BCD & 0xFFu);
+  USBD_CDC_DeviceDesc[13] = (uint8_t)(FW_VERSION_BCD >> 8);
 
   /* USER CODE END USB_Device_Init_PreTreatment */
 

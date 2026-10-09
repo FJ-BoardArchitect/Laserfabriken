@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/laser_control.c
     Core/Src/app/params.c
     Core/Src/app/cli.c
+    Core/Src/app/rtt.c
     Core/Src/bsp/bsp_temp.c
     Core/Src/bsp/bsp_tec.c
     Core/Src/bsp/bsp_laser.c
@@ -63,6 +64,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    # Debug builds get a CLI channel over SWD (SEGGER RTT, see Core/Src/app/rtt.c)
+    $<$<CONFIG:Debug>:CLI_RTT=1>
 )
 
 # Remove wrong libob.a library dependency when using cpp files

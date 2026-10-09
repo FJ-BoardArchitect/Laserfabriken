@@ -40,6 +40,16 @@
  */
 #define BSP_DISPLAY_Send(buf, len)   HAL_UART_Transmit(&huart1, (uint8_t*)(buf), (uint16_t)(len), 100)
 
+/* Display link transport (see Docs/spud_usb_displaylank.md):
+ *   defined     -> UGN: the display hangs off USART1 (FPC). cli.c runs a
+ *                  dedicated UART channel for it, always in machine mode.
+ *   not defined -> SPUD: the display is a USB host on the same USB-C port a
+ *                  PC uses; the USB channel switches to machine mode on the
+ *                  display's 'hello'. USART1 and DISPLAY_DO1/2/3 are gone.
+ * (Removing it is step 8 of Docs/spud_usb_implementation_plan.md -- the
+ * display-flashing bridge in cli.c still references the UART directly.) */
+#define BSP_DISPLAY_LINK_UART 1
+
 /* ── Shared SPI bus ──────────────────────────────────────────────────────────
  * SPI3: PC10 (SCK), PC11 (MISO), PC12 (MOSI) — Mode 1 (CPOL=0, CPHA=1).
  * ADS1220 CS: PA4.  DAC8562S CS: PA3 (reserved for Spudkortet).
