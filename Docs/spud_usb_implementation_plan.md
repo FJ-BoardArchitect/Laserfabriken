@@ -1,6 +1,6 @@
 # SPUD USB-länk — implementationsplan
 
-**Status:** steg 0 och 1 klara och verifierade på UGN via SWD-konsol (2026-10-08). PC-terminal-test går inte på UGN: 5V är hårdkopplad till USB-C-kontakten, så en PC får inte sättas i. Första riktiga USB-testet blir steg 2 med displayen som host.
+**Status (2026-10-09):** steg 0–3 klara och verifierade på UGN. Displayen enumererar STM32 över USB, handskakningen går igenom, STM32 skickar hela tillståndet efter hello, och rattvridningar på displayen landar i STM32 (setpoint följdes i realtid via SWD-konsolen). PC-terminal-test går inte på UGN: 5V är hårdkopplad till USB-C-kontakten. Öppet: displayens logg över UART0/FPC når inte STM32 (RX-pinnen flyter), parkerat.
 **Datum:** 2026-10-08
 **Design:** `spud_usb_displaylank.md` (läs den först)
 **Repon:** `Laserfabriken` (STM32, gren `usb-c-Test` från `origin/dev_fj`) och `Laserfabriken_Display` (ESP32-S3)
@@ -96,7 +96,7 @@ STM32  -> display: hello <UGN|SPUD> fw=<FW_VERSION_STR> proto=1
 
 ---
 
-## Steg 2 — ESP32: USB-host-transport + hello 🔧 (kod skriven, väntar på kompilering/flashning i Arduino IDE)
+## Steg 2 — ESP32: USB-host-transport + hello ✅ (verifierat 2026-10-09)
 
 *2026-10-08: `stm_link.h/.cpp` skrivna ovanpå kärnans `USBHost` + `USBHostSerial` (ingen rå bulk-kod behövdes, kärna 3.3.12 har klassen). `SerialSTM` borttagen ur sketchen, `Serial` = UART0 = loggkanal som STM32 speglar till SWD-konsolen (`[disp] ...`). STM32-sidan ignorerar `#`-rader och väljer USB-kanalen som displaykanal så fort den är i maskinläge, även på UGN.*
 
@@ -151,7 +151,9 @@ Displayen ska sitta i STM32-kortets USB-C med en C-till-C-kabel. På **UGN** är
 
 ---
 
-## Steg 3 — STM32: skicka värden till displayen
+## Steg 3 — STM32: skicka värden till displayen ✅ (verifierat 2026-10-09)
+
+*`send_state(ch)` i `cli.c` skickar alla tio protokollrader; anropas efter displayens hello och på `get all`. Diff-synken orörd. `stream`-kommandot ströks: synken strömmar redan `crystal.temp/output/tec_voltage` vid ändring.*
 
 - **Tillståndsdump efter hello** och på `get all` (båda lägena, i maskinläge utan `OK`-text):
   ```

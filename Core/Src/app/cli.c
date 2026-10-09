@@ -223,6 +223,7 @@ static void cli_send_bin(cli_chan_t *ch, const uint8_t *data, uint16_t len)
  * (see "Display state sync") -- forward-declared here so bridge_seq_tick()
  * below can call it. */
 static void cli_force_display_resync(void);
+static void send_state(cli_chan_t *ch);
 
 /* ── Bridge mode (ESP32 display firmware update) ────────────────────────────
  * Relays raw bytes between the PC (USB-CDC) and the ESP32's UART while it's
@@ -428,6 +429,15 @@ static void process_line(cli_chan_t *ch, char *line)
         }
         cli_sendf(ch, "hello %s fw=%s proto=%u\r\n",
                   effective_mode_str(), FW_VERSION_STR, (unsigned)CLI_PROTO_VERSION);
+        if (n >= 1 && strcmp(who, "display") == 0)
+            send_state(ch);   /* everything the UI needs, right away (§5.2) */
+        return;
+    }
+
+    /* get all -- the complete display state, same lines the display gets
+     * after hello and from the diff sync, on whichever channel asks. */
+    if (strcmp(line, "get all") == 0) {
+        send_state(ch);
         return;
     }
 
@@ -478,6 +488,8 @@ static void process_line(cli_chan_t *ch, char *line)
                  "  display mode ugn       — bench-test: show UGN UI for 60s\r\n"
                  "  display mode auto      — cancel override, resume BSP_DEVICE_MODE_STR\r\n"
                  "  status\r\n"
+                 "  get all               — the display state as protocol lines\r\n"
+                 "  hello                 — handshake reply (board, fw, proto)\r\n"
                  "  save\r\n"
                  "  help\r\n");
         return;
@@ -908,6 +920,33 @@ static void cli_force_display_resync(void)
     s_sync_crystal_setpoint = -1000.0f;
     s_sync_crystal_setpoint_last_ms = (uint32_t)(0u - 1000u);
     s_sync_crystal_tec_v    = -1000.0f;
+}
+
+/* The complete display state, unconditionally, as the same protocol lines
+ * cli_sync_display() below pushes one by one when something changes. Sent
+ * to the display right after its hello (so a freshly connected display has
+ * everything at once instead of waiting for the periodic resends), and to
+ * whoever asks with 'get all'. Does not touch the sync's s_sync_* memory:
+ * a change after this dump is still a change. */
+static void send_state(cli_chan_t *ch)
+{
+    const LaserState_t *ls = Laser_Control_GetState();
+    float wavelength = g_crystal_wl_k * g_crystal_pid.setpoint + g_crystal_wl_m;
+    float temp, output;
+    TEC_Control_GetState(TEC_CRYSTAL, &temp, &output);
+    uint8_t v5_on = (HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET) ? 1u : 0u;
+    uint8_t crystal_tec_on = (HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET) ? 1u : 0u;
+
+    cli_sendf(ch, "set device.mode %s\r\n", effective_mode_str());
+    cli_sendf(ch, "set laser.power %u\r\n", (unsigned)ls->power_pct);
+    cli_sendf(ch, "set crystal.wavelength %.2f\r\n", (double)wavelength);
+    cli_send(ch, ls->enabled ? "laser on\r\n" : "laser off\r\n");
+    cli_send(ch, v5_on ? "5v on\r\n" : "5v off\r\n");
+    cli_send(ch, crystal_tec_on ? "crystal.tec on\r\n" : "crystal.tec off\r\n");
+    cli_sendf(ch, "crystal.setpoint %.4f\r\n", (double)g_crystal_pid.setpoint);
+    cli_sendf(ch, "crystal.temp %.4f\r\n", (double)temp);
+    cli_sendf(ch, "crystal.output %.4f\r\n", (double)output);
+    cli_sendf(ch, "crystal.tec_voltage %.2f\r\n", (double)BSP_TEC_EstimateVoltage(output));
 }
 
 static void cli_sync_display(void)
