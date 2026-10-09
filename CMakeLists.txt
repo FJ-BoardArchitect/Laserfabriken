@@ -50,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/params.c
     Core/Src/app/cli.c
     Core/Src/app/rtt.c
+    Core/Src/app/usbc_port.c
     Core/Src/bsp/bsp_temp.c
     Core/Src/bsp/bsp_tec.c
     Core/Src/bsp/bsp_laser.c

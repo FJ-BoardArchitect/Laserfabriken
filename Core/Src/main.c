@@ -31,6 +31,7 @@
 #include "laser_control.h"
 #include "params.h"
 #include "cli.h"
+#include "usbc_port.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -126,6 +127,7 @@ int main(void)
       }
   }
 
+  USBC_Init();   /* 5V on USB-C VBUS only for a detected display */
   TEC_Control_Init();
   Laser_Control_Init();
   Params_Load();
@@ -144,6 +146,7 @@ int main(void)
       BSP_TEC_SetOutput(TEC_CRYSTAL);
     }
     Params_Process();
+    USBC_Process();
     CLI_Process();
     /* USER CODE END WHILE */
 

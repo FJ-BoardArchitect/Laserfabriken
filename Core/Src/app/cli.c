@@ -5,6 +5,7 @@
 #include "laser_control.h"
 #include "params.h"
 #include "fw_version.h"
+#include "usbc_port.h"
 #ifdef CLI_RTT
 #include "rtt.h"
 #endif
@@ -351,6 +352,10 @@ static void bridge_seq_tick(void)
  * (fully handled); 0 otherwise, so the caller falls through as normal. */
 static int bridge_handle_command(cli_chan_t *ch, const char *line)
 {
+    if (strcmp(line, "display_update") == 0 && USBC_Enabled()) {
+        cli_send(ch, "ERR: bridge needs the FPC display -- build without BSP_USBC_VBUS_SWITCH\r\n> ");
+        return 1;
+    }
     if (strcmp(line, "display_update") == 0) {
         if (s_bridge_active || s_bridge_seq_state != BRIDGE_SEQ_NONE) {
             cli_send(ch, "ERR: busy\r\n> ");
@@ -488,11 +493,21 @@ static void process_line(cli_chan_t *ch, char *line)
                  "  display mode spud      — bench-test: show SPUD UI for 60s\r\n"
                  "  display mode ugn       — bench-test: show UGN UI for 60s\r\n"
                  "  display mode auto      — cancel override, resume BSP_DEVICE_MODE_STR\r\n"
+                 "  usbc                  — USB-C detection state (5V on VBUS only for a display)\r\n"
                  "  status\r\n"
                  "  get all               — the display state as protocol lines\r\n"
                  "  hello                 — handshake reply (board, fw, proto)\r\n"
                  "  save\r\n"
                  "  help\r\n");
+        return;
+    }
+
+    /* usbc -- USB-C port detection state and raw CC comparator readings */
+    if (strcmp(line, "usbc") == 0) {
+        uint8_t cc1, cc2; bool src;
+        USBC_DebugCC(&cc1, &cc2, &src);
+        cli_sendf(ch, "USB-C: %s\r\n  role=%s  CC1=%u  CC2=%u  (source: 0=Ra 1=Rd 2=open; sink: 0=open 1..3=Rp)\r\n",
+                  USBC_StateStr(), src ? "source" : "sink", cc1, cc2);
         return;
     }
 
@@ -561,6 +576,7 @@ static void process_line(cli_chan_t *ch, char *line)
         cli_sendf(ch, "Display UART: %lu bytes received, last=0x%02X\r\n",
                   (unsigned long)s_disp_rx_count, s_disp_rx_last);
 
+        cli_sendf(ch, "USB-C: %s\r\n", USBC_StateStr());
         cli_sendf(ch, "Display bridge: %s\r\n",
                   s_bridge_active ? "ACTIVE (flashing)"
                   : (s_bridge_seq_state != BRIDGE_SEQ_NONE) ? "power-cycling"
@@ -611,6 +627,13 @@ static void process_line(cli_chan_t *ch, char *line)
     }
 
     /* 5v on / 5v off */
+    if ((strcmp(line, "5v on") == 0 || strcmp(line, "5v off") == 0) && USBC_Enabled()) {
+        /* VBUS 5V follows USB-C detection (usbc_port.c); a manual 'on' could
+         * drive 5V into a PC's port. The display gets the real state. */
+        if (ch->machine) confirm(ch, "5v");
+        else cli_sendf(ch, "ERR: 5V is automatic (USB-C: %s)\r\n", USBC_StateStr());
+        return;
+    }
     if (strcmp(line, "5v on") == 0) {
         if (s_bridge_active || s_bridge_seq_state != BRIDGE_SEQ_NONE) {
             if (ch->machine) confirm(ch, "5v"); else cli_send(ch, "ERR: busy\r\n");

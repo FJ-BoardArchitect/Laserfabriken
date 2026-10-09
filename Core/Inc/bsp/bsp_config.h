@@ -50,6 +50,16 @@
  * display-flashing bridge in cli.c still references the UART directly.) */
 #define BSP_DISPLAY_LINK_UART 1
 
+/* USB-C VBUS switching (usbc_port.c). Defined: the 5V regulator output that
+ * reaches the USB-C VBUS is switched by Type-C detection -- on for a display
+ * (Rd on CC), off for a PC (Rp on CC) or nothing. Not defined: 5V always on.
+ * On UGN the same regulator (M6, enable PB0) also feeds the FPC connector,
+ * so leave this undefined when the display hangs off the FPC instead of
+ * USB-C. SPUD: dedicated VBUS load switch with reverse blocking. */
+#define BSP_USBC_VBUS_SWITCH  1
+#define BSP_USBC_VBUS_EN_PORT M6_EN_GPIO_Port
+#define BSP_USBC_VBUS_EN_PIN  M6_EN_Pin
+
 /* ── Shared SPI bus ──────────────────────────────────────────────────────────
  * SPI3: PC10 (SCK), PC11 (MISO), PC12 (MOSI) — Mode 1 (CPOL=0, CPHA=1).
  * ADS1220 CS: PA4.  DAC8562S CS: PA3 (reserved for Spudkortet).
