@@ -257,7 +257,10 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SET_CONTROL_LINE_STATE:
-
+      /* wLength=0, so pbuf is the raw setup packet (USBD_SetupReqTypedef):
+       * wValue is at byte offset 2, bit 0 = DTR (a host program has the
+       * port open). The CLI sends its banner on the rising edge. */
+      CLI_OnUsbLineState((uint8_t)(pbuf[2] & 0x01u));
     break;
 
     case CDC_SEND_BREAK:

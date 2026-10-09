@@ -1123,9 +1123,30 @@ static void banner(cli_chan_t *ch)
  * loop: only a flag here, no sending. */
 static volatile uint8_t s_usb_enumerated_pending;
 
+static uint8_t s_usb_dtr_prev;   /* last DTR level, see CLI_OnUsbLineState() */
+
 void CLI_OnUsbEnumerated(void)
 {
     s_usb_enumerated_pending = 1;
+    s_usb_dtr_prev = 0;   /* a new host starts with the port closed: its first open must count as a rise */
+}
+
+/* Set from USB interrupt context (CDC_Control_FS, SET_CONTROL_LINE_STATE)
+ * when a program on the host opens the port and raises DTR. The banner is
+ * sent then, plus a short delay, instead of at enumeration: at enumeration
+ * no program is listening yet, and a Linux tty still in its default
+ * echo mode bounced the banner straight back into the CLI as garbage
+ * input ("ERR: unknown command: '=== Laserfabri...'"). The delay covers the
+ * gap between the port opening (DTR up) and the program switching the tty
+ * to raw mode. A host that never raises DTR just gets no banner. */
+#define CLI_BANNER_DELAY_MS 150u
+static volatile uint8_t s_usb_dtr_rise_pending;
+
+void CLI_OnUsbLineState(uint8_t dtr)
+{
+    if (dtr && !s_usb_dtr_prev)
+        s_usb_dtr_rise_pending = 1;
+    s_usb_dtr_prev = dtr;
 }
 
 /* Feed one channel's pending bytes through line assembly and dispatch.
@@ -1176,9 +1197,9 @@ void CLI_Init(void)
     RTT_Init();
     banner(&s_rtt);
 #endif
-    /* The banner is printed when a host enumerates us (CLI_OnUsbEnumerated),
-     * not here: at boot no host is configured yet and the bytes would just
-     * be dropped by usb_send(). */
+    /* The USB banner is printed when a program opens the port on the host
+     * (CLI_OnUsbLineState, DTR rising), not here: at boot nothing is
+     * listening and the bytes would just be dropped by usb_send(). */
 }
 
 void CLI_Process(void)
@@ -1190,7 +1211,20 @@ void CLI_Process(void)
         s_usb_enumerated_pending = 0;
         s_usb.machine = false;
         s_usb.pos     = 0;
-        banner(&s_usb);
+    }
+    {
+        static uint8_t  banner_armed;
+        static uint32_t banner_at;
+        if (s_usb_dtr_rise_pending) {
+            s_usb_dtr_rise_pending = 0;
+            banner_armed = 1;
+            banner_at = HAL_GetTick() + CLI_BANNER_DELAY_MS;
+        }
+        if (banner_armed && (int32_t)(HAL_GetTick() - banner_at) >= 0) {
+            banner_armed = 0;
+            if (!s_usb.machine)   /* never to the display */
+                banner(&s_usb);
+        }
     }
 
     bridge_seq_tick();

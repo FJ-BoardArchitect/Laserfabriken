@@ -1,6 +1,8 @@
 #ifndef CLI_H
 #define CLI_H
 
+#include <stdint.h>
+
 /* Print welcome banner and prompt. */
 void CLI_Init(void);
 
@@ -14,5 +16,10 @@ void CLI_Process(void);
  * mode so a new host -- PC or display -- always starts from a known state;
  * the display re-establishes machine mode with its 'hello'. */
 void CLI_OnUsbEnumerated(void);
+
+/* Called from the USB stack (CDC_Control_FS, interrupt context) on every
+ * SET_CONTROL_LINE_STATE request. dtr = 1 when a host program has the
+ * port open; its rising edge triggers the terminal banner. */
+void CLI_OnUsbLineState(uint8_t dtr);
 
 #endif /* CLI_H */
