@@ -1,5 +1,7 @@
 # SPUD USB-länk — läget 2026-10-08 och nästa steg
 
+> **Inaktuell sedan 2026-10-09.** Allt nedan är gjort och committat. Aktuellt läge: `spud_usb_implementation_plan.md` (statusraden) och `spud_usb_displaylank.md` §11. Fortfarande giltigt här: §4 snabbreferens. Rättelser: displayen sitter bara via USB-C (ingen FPC), och UGN:s USB-C-5V är styrbar via PB0 — "anslut aldrig en dator" gäller inte längre med nuvarande firmware.
+
 Arbetsanteckning för att fortsätta där vi slutade. Bakgrund i `spud_usb_displaylank.md` (design) och `spud_usb_implementation_plan.md` (plan med status per steg).
 
 ---

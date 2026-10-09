@@ -245,5 +245,19 @@ Proof of concept på befintligt UGN-kort, utan omlödning. Uppställning: barrel
 | Värde satt från datorn → kabelbyte → visas på displayen | ✅ |
 | Värde överlever omstart av STM32 (läses från flash) | ✅ |
 | Välkomsttext skickas när ett program öppnar porten (DTR), första kommandot är rent | ✅ |
+| Utan barrel-jack: datorn (USB-A) matar kortet, STM32 startar, sparade värden läses, nytt börvärde sätts och sparas i flash | ✅ |
+
+### 11.1 Att använda UGN-uppställningen
+
+| Barrel-jack | USB-C | Vad händer |
+|---|---|---|
+| in | display | 5V på, displayen kör. Normalläget. |
+| in | dator (USB-A) | 5V av, kortet kör på barrel, datorn har CLI. |
+| ur | dator (USB-A) | Kortet kör på datorns ström: CLI, läsa/spara värden. TEC och laser får inte slås på (räcker inte, och firmware spärrar inte än). |
+| ur | display | Ingenting fungerar: displayen har inget batteri och kortet ingen ström. |
+
+**Byten:** kabel- och barrel-byten fungerar i valfri ordning med nuvarande firmware (5V styrs av CC-detekteringen, PB0 startar låg). Att sätta i barrel-jacken medan datorn sitter i bör vara ofarligt: regulatorn är avstängd, barrel-12V når inte USB-C, och kortet går över till barrel-matning. Det bygger på kortets beteende, inte på ett verifierat schema. **Säkrast:** dra ur datorn, sätt i barrel, sätt i datorn igen. Flasha inte STM32 medan en dator sitter i USB-C (PB0 är odriven under reset).
+
+**Kvirk på UGN:** med en dator i och 5V-regulatorn av matas kortets 5V-skena av datorn, även med barrel-jacken i. Ofarligt men oavsiktligt; SPUD:s backströmsspärr tar bort det.
 
 **Inte verifierat / kvar till SPUD:** Try.SNK mot DRP-dator, backströmsspärr, 5V-läget under reset/flashning, strömväg och barrel-detekt (§3.2 punkt 4–5).

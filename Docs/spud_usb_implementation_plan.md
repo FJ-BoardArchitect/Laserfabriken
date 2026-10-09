@@ -1,6 +1,6 @@
 # SPUD USB-länk — implementationsplan
 
-**Status (2026-10-09):** steg 0–3 och 6 klara och verifierade på UGN; steg 4–5 fungerar i grunden (displayen visar värden över USB och skickar rattvridningar) men displayens frånkopplingsläge och "svaret vinner"-beteendet är inte gjorda. Displayen enumererar STM32 över USB, handskakningen går igenom, STM32 skickar hela tillståndet efter hello, och rattvridningar på displayen landar i STM32 (setpoint följdes i realtid via SWD-konsolen). PC-terminal-test går inte på UGN: 5V är hårdkopplad till USB-C-kontakten. Öppet: displayens logg över UART0/FPC når inte STM32 (RX-pinnen flyter), parkerat.
+**Status (2026-10-09, kväll):** steg 0–3, 6 och 7 klara och verifierade på UGN, plus automatisk 5V-styrning via USB-C CC (`usbc_port.c`, inte i den ursprungliga planen). Displayen och en dator delar samma USB-C-port; värden flyttas mellan dem och överlever omstart; datorn kan driva kortet utan barrel-jack. Steg 4–5 fungerar i grunden; displayens frånkopplingsläge och "svaret vinner" bedömdes som lågt prioriterade. Displayens logg via UART0 parkerad (ingen FPC i uppställningen). Kvar: Try.SNK + test mot DRP-bärbar (C-till-C), och steg 8 (SPUD-hårdvara). Detaljer: designdokumentet §11.
 **Datum:** 2026-10-08
 **Design:** `spud_usb_displaylank.md` (läs den först)
 **Repon:** `Laserfabriken` (STM32, gren `usb-c-Test` från `origin/dev_fj`) och `Laserfabriken_Display` (ESP32-S3)
@@ -195,7 +195,9 @@ Displayen ska sitta i STM32-kortets USB-C med en C-till-C-kabel. På **UGN** är
 
 **Test:** vrid på ratten → `set laser.power N` går till STM32 → `set laser.power N` kommer tillbaka → displayen visar N. `status` i terminal bekräftar. Framkalla vakt-trip med `set sim.laser_temp 99` → displayen visar laser av utan att ha rört något.
 
-## Steg 7 — PC: samma sak från en dator
+## Steg 7 — PC: samma sak från en dator ✅ (verifierat 2026-10-09)
+
+*Gick att göra på UGN trots allt: UGN:s USB-C-5V visade sig vara styrbar (PB0), och med `usbc_port.c` hålls den av när en dator detekteras. Dator via USB-A-till-C-kabel: CLI, lägesbyte, värden läses/sätts, välkomsttext på DTR. DFU ej testat.*
 
 Inget nytt att bygga; detta är regressionstestet för att steg 1–6 inte bröt terminalen:
 1. PC-terminal mot UGN: banner, prompt, eko, `help`, `status`, `set`, `save` oförändrat.
