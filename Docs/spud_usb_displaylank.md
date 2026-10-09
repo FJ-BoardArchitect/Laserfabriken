@@ -241,5 +241,9 @@ Proof of concept på befintligt UGN-kort, utan omlödning. Uppställning: barrel
 | Auktoritativt svar: `set laser.power 150` → `set laser.power 100` | ✅ |
 | Dator (USB-A) → STM32, CLI i människoläge och lägesbyte via hello | ✅ |
 | Automatisk 5V: display in → 5V på, ur → 5V av, dator in → 5V förblir av | ✅ (live, båda kontaktvändningarna) |
+| Värde satt på displayen → kabelbyte → läses av datorn (`get all`, `status`) | ✅ |
+| Värde satt från datorn → kabelbyte → visas på displayen | ✅ |
+| Värde överlever omstart av STM32 (läses från flash) | ✅ |
+| Välkomsttext skickas när ett program öppnar porten (DTR), första kommandot är rent | ✅ |
 
 **Inte verifierat / kvar till SPUD:** Try.SNK mot DRP-dator, backströmsspärr, 5V-läget under reset/flashning, strömväg och barrel-detekt (§3.2 punkt 4–5).
