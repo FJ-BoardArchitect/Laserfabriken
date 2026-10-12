@@ -53,20 +53,20 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             s_disp_rx_head = next;
         } /* ring full (CLI_Process() not keeping up at all) -- drop rather
              than overwrite unread data */
-        HAL_UART_Receive_IT(&huart1, &s_disp_rx_isr_byte, 1);
+        HAL_UART_Receive_IT(&hlpuart1, &s_disp_rx_isr_byte, 1);
     }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1) {
-        __HAL_UART_CLEAR_OREFLAG(&huart1);
-        __HAL_UART_CLEAR_NEFLAG(&huart1);
-        __HAL_UART_CLEAR_FEFLAG(&huart1);
-        __HAL_UART_CLEAR_PEFLAG(&huart1);
+        __HAL_UART_CLEAR_OREFLAG(&hlpuart1);
+        __HAL_UART_CLEAR_NEFLAG(&hlpuart1);
+        __HAL_UART_CLEAR_FEFLAG(&hlpuart1);
+        __HAL_UART_CLEAR_PEFLAG(&hlpuart1);
         /* HAL aborts the pending receive on error -- re-arm it or RX stops
          * permanently, same failure mode the old polling code hit. */
-        HAL_UART_Receive_IT(&huart1, &s_disp_rx_isr_byte, 1);
+        HAL_UART_Receive_IT(&hlpuart1, &s_disp_rx_isr_byte, 1);
     }
 }
 
@@ -893,7 +893,7 @@ static void cli_sync_display(void)
 
 void CLI_Init(void)
 {
-    HAL_UART_Receive_IT(&huart1, &s_disp_rx_isr_byte, 1);
+    HAL_UART_Receive_IT(&hlpuart1, &s_disp_rx_isr_byte, 1);
     cli_send("\r\n=== Laserfabriken ===\r\n");
     cli_send("Type 'help' for commands\r\n> ");
 }

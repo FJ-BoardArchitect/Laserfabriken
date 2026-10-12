@@ -73,6 +73,8 @@ void Error_Handler(void);
 #define DISPLAY_RX_GPIO_Port GPIOC
 #define DISPLAY_TX_Pin GPIO_PIN_1
 #define DISPLAY_TX_GPIO_Port GPIOC
+#define DAC_CS_Pin GPIO_PIN_1
+#define DAC_CS_GPIO_Port GPIOA
 #define DISPLAY_DO3_Pin GPIO_PIN_2
 #define DISPLAY_DO3_GPIO_Port GPIOA
 #define DISPLAY_DO2_Pin GPIO_PIN_5

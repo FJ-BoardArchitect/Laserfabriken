@@ -4,6 +4,7 @@
 #include "usart.h"
 #include "spi.h"
 #include "dac.h"
+#include "gpio.h"
 #include "main.h"
 #include "usbd_cdc_if.h"
 
@@ -38,13 +39,13 @@
  * a 1-byte polling read silently drops bytes when the main loop is briefly
  * elsewhere (confirmed on the bench), which the ISR-fed ring buffer avoids.
  */
-#define BSP_DISPLAY_Send(buf, len)   HAL_UART_Transmit(&huart1, (uint8_t*)(buf), (uint16_t)(len), 100)
+#define BSP_DISPLAY_Send(buf, len)   HAL_UART_Transmit(&hlpuart1, (uint8_t*)(buf), (uint16_t)(len), 100)
 
 /* ── Shared SPI bus ──────────────────────────────────────────────────────────
  * SPI3: PC10 (SCK), PC11 (MISO), PC12 (MOSI) — Mode 1 (CPOL=0, CPHA=1).
  * ADS1220 CS: PA4.  DAC8562S CS: PA3 (reserved for Spudkortet).
  */
-#define BSP_SPI_BUS         (&hspi3)
+#define BSP_SPI_BUS         (&hspi2)
 #define BSP_ADC_CS_PORT     ADC_CS_GPIO_Port
 #define BSP_ADC_CS_PIN      ADC_CS_Pin
 #define BSP_LASER_CS_PORT   DAC_CS_GPIO_Port   /* reserved — DAC8562S on Spudkortet */
@@ -55,8 +56,8 @@
  * Laser TEC (Spudkortet): PA4 freed up on spud by moving ADC_CS → DAC1_OUT1
  */
 #define BSP_DAC                 (&hdac1)
-#define BSP_DAC_CH_CRYSTAL      DAC_CHANNEL_2
-#define BSP_DAC_CH_LASER        DAC_CHANNEL_2  /* placeholder — spudkortet uses DAC1_CH1 (PA4) */
+#define BSP_DAC_CH_CRYSTAL      DAC_CHANNEL_1
+#define BSP_DAC_CH_LASER        DAC_CHANNEL_1  /* placeholder — spudkortet uses DAC1_CH1 (PA4) */
 
 /* ── TEC enable and polarity (UGN — TPS563252 programmable buck) ─────────────
  * TEC_EN (PC5): enable the TEC buck converter.

@@ -29,15 +29,15 @@ Kortet styr temperaturen på en laserkristall (TEC = termoelektrisk kylare/värm
 ## 2. Arkitektur
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Applikationslager                                        │
-│  tec_control.c   laser_control.c   params.c   cli.c        │
-├──────────────────────────────────────────────────────────┤
+┌─────────────────────────────────────────────────────────────┐
+│  Applikationslager                                          │
+│  tec_control.c   laser_control.c   params.c   cli.c         │
+├─────────────────────────────────────────────────────────────┤
 │  BSP-lager (Core/Inc/bsp, Core/Src/bsp)                     │
 │  bsp_tec.c   bsp_temp.c   bsp_laser.c   bsp_config.h        │
-├──────────────────────────────────────────────────────────┤
-│  STM32 HAL / CubeMX-genererad kod (gpio.c, spi.c, usart.c…)  │
-└──────────────────────────────────────────────────────────┘
+├─────────────────────────────────────────────────────────────┤
+│  STM32 HAL / CubeMX-genererad kod (gpio.c, spi.c, usart.c…) │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 - **`tec_control.c`** — huvudloopen (`TEC_Control_Tick()`, körs var 100:e ms från `main.c`): läser temperatur, kör PID för kristall- och laser-TEC, hanterar buck-konverterns power-good-övervakning och lasertemperaturvakten (autonom säkerhetsavstängning).

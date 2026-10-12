@@ -1,6 +1,6 @@
 #include "bsp_tec.h"
 #include "bsp_config.h"
-#include "dac.h"
+// #include "dac.h"
 #include "stm32g4xx_hal.h"
 #include <stdint.h>
 #include <assert.h>

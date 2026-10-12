@@ -154,9 +154,9 @@ def main():
             "--baud",
             str(args.baud),
             "--before",
-            "no-reset",
+            "no_reset",
             "--after",
-            "no-reset",
+            "no_reset",
             "--chip",
             "esp32s3",
         ] + resolved_esptool_args
