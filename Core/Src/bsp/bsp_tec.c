@@ -1,6 +1,6 @@
 #include "bsp_tec.h"
 #include "bsp_config.h"
-// #include "dac.h"
+#include "tec_control.h"
 #include "stm32g4xx_hal.h"
 #include <stdint.h>
 #include <assert.h>
@@ -110,13 +110,18 @@ void BSP_TEC_SetOutput(TecChannel_t ch)
         HAL_GPIO_WritePin(TEC_EN_GPIO_Port, TEC_EN_Pin, GPIO_PIN_RESET);
         polarity_state = POLARITY_RUN;
     } else {
-        if (value < 0.0f) {
-            value = -value; // Make value positive for DAC calculation
-        }
-        if (value > 1.0f) value = 1.0f;
+        if (g_tec_manual_test) {
+            // In manual test mode, the DAC value is set directly by the CLI
+            BSP_TEC_SetRawDAC((uint16_t)((value < 0.0f ? -value : value)));
+        } else {
+            if (value < 0.0f) {
+                value = -value; // Make value positive for DAC calculation
+            }
+            if (value > 1.0f) value = 1.0f;
 
-        dac_code = 4095u - (uint16_t)(value * 4095.0f);
-        BSP_TEC_SetRawDAC(dac_code);
+            dac_code = TEC_DAC_MAX - (uint16_t)(value * (TEC_DAC_MAX - TEC_DAC_MIN));
+            BSP_TEC_SetRawDAC(dac_code);
+        }
     }
     _polarity_state_ch[ch] = polarity_state;
 }

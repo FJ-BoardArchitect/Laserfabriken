@@ -43,10 +43,11 @@ static volatile uint8_t  s_disp_rx_ring[DISP_RX_RING_SIZE];
 static volatile uint16_t s_disp_rx_head;
 static volatile uint16_t s_disp_rx_tail;
 static uint8_t            s_disp_rx_isr_byte;
+extern uint16_t adc_buffer[];
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == LPUART1) {
         uint16_t next = (uint16_t)((s_disp_rx_head + 1u) % DISP_RX_RING_SIZE);
         if (next != s_disp_rx_tail) {
             s_disp_rx_ring[s_disp_rx_head] = s_disp_rx_isr_byte;
@@ -59,7 +60,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == LPUART1) {
         __HAL_UART_CLEAR_OREFLAG(&hlpuart1);
         __HAL_UART_CLEAR_NEFLAG(&hlpuart1);
         __HAL_UART_CLEAR_FEFLAG(&hlpuart1);
@@ -368,6 +369,23 @@ static void process_line(char *line)
                   (double)g_crystal_pid.Ki,
                   (double)g_crystal_pid.Kd);
 
+        float tec_imeas, tec_vmeas;
+        if (adc_buffer[0] > 5u) {
+            tec_imeas = (adc_buffer[0] * 3.3f / 4095.0f + 0.05) * (33.0+10.0) / 33.0; /* TEC current sense voltage */
+        } else {
+            tec_imeas = 0.0f; // Avoid printing offset for small ADC values
+        }
+
+        if (adc_buffer[1] > 5u) {
+            tec_vmeas = (adc_buffer[1] * 3.3f / 4095.0f + 0.05) * (47.0+10.0) / 10.0; /* TEC voltage sense voltage */
+        } else {
+            tec_vmeas = 0.0f; // Avoid printing offset for small ADC values
+        } 
+
+        cli_sendf("TEC I=%.2f V=%.2f\r\n",
+                  (double)tec_imeas,
+                  (double)tec_vmeas);
+
         if (g_tec_pg_fault)
             cli_send("  TEC buck: FAULT — power-good low\r\n");
 
@@ -538,7 +556,7 @@ static void process_line(char *line)
             cli_send("ERR: value must be -4095 to 4095\r\n");
             return;
         }
-        BSP_TEC_SetDac(TEC_CRYSTAL, (float)dac_code / 4095.0f);
+        BSP_TEC_SetDac(TEC_CRYSTAL, (float)dac_code);
         return;
     }
 

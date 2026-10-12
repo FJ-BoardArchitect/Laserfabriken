@@ -17,6 +17,8 @@ typedef enum {
     POLARITY_RUN = 3,
 } PolarityState_t;
 
+#define TEC_DAC_MAX (4095u - 529u)
+#define TEC_DAC_MIN (1024u) // Limit max current during tests
 
 /* Enable the TEC buck converter and zero the output. Call once per channel at startup. */
 void BSP_TEC_Init(TecChannel_t ch);

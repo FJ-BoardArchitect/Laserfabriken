@@ -20,6 +20,7 @@
 #include "main.h"
 #include "adc.h"
 #include "dac.h"
+#include "dma.h"
 #include "usart.h"
 #include "spi.h"
 #include "ucpd.h"
@@ -41,6 +42,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ADC1_CHANNELS 1
+#define ADC2_CHANNELS 1
 
 /* USER CODE END PD */
 
@@ -52,6 +55,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+uint16_t adc_buffer[ADC1_CHANNELS + ADC2_CHANNELS];
 
 /* USER CODE END PV */
 
@@ -95,6 +99,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USB_Device_Init();
   MX_UCPD1_Init();
   MX_LPUART1_UART_Init();
@@ -145,6 +150,11 @@ int main(void)
       last_tick = now;
       TEC_Control_Tick();
       BSP_TEC_SetOutput(TEC_CRYSTAL);
+
+      // Start ADC conversion
+      HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, ADC1_CHANNELS);
+      HAL_ADC_Start_DMA(&hadc2, (uint32_t*)(adc_buffer + ADC1_CHANNELS), ADC2_CHANNELS);
+
     }
     Params_Process();
     CLI_Process();
