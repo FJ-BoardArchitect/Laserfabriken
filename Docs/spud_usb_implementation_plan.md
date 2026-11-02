@@ -92,7 +92,7 @@ STM32  -> display: hello <UGN|SPUD> fw=<FW_VERSION_STR> proto=1
 2. Skriv `hello display fw=1.0.0 proto=1` → svar `hello UGN fw=1.1.0 proto=1`, därefter **inget eko och ingen prompt**. Skriv `set laser.power 50` → `OK laser.power = 50% ...` kommer fortfarande (ingen prompt efter).
 3. Dra ur och sätt i USB-kabeln → banner + prompt är tillbaka, eko fungerar.
 4. Displayen på UART (UGN) fungerar exakt som före ändringen (synken skickar `set laser.power` m.m.).
-5. Bygget går igenom med `cmake --build --preset Debug` och RAM/Flash har inte vuxit orimligt.
+5. Bygget går igenom med `cmake --build --preset UGN-Debug` (hette `Debug` före kortvalet 2026-11-02) och RAM/Flash har inte vuxit orimligt.
 
 ---
 

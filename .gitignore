@@ -26,3 +26,16 @@ Tools/firmware-updater/dist/libusb-1.0.dll
 # System
 .DS_Store
 Thumbs.db
+
+# CubeMX regenerates these next to each board's .ioc (boards/<board>/). Only
+# boards/<board>/Core/ is used by the build; Drivers/, Middlewares/ and
+# USB_Device/ are shared from the repo root and must not be duplicated.
+boards/*/Drivers/
+boards/*/Middlewares/
+boards/*/USB_Device/
+boards/*/cmake/
+boards/*/CMakeLists.txt
+boards/*/CMakePresets.json
+boards/*/startup_stm32g431xx.s
+boards/*/STM32G431XX_FLASH.ld
+Tools/rtt-cli/__pycache__/

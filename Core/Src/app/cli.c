@@ -6,6 +6,7 @@
 #include "params.h"
 #include "fw_version.h"
 #include "usbc_port.h"
+#include "bringup.h"
 #ifdef CLI_RTT
 #include "rtt.h"
 #endif
@@ -208,6 +209,10 @@ static void cli_sendf(cli_chan_t *ch, const char *fmt, ...)
     cli_send(ch, buf);
 }
 
+/* bringup.c output adapter */
+static void cli_bringup_out(void *ctx, const char *text) { cli_send((cli_chan_t *)ctx, text); }
+
+
 /* Binary-safe counterpart to cli_send(ch, )/cli_sendf(ch, ) -- both of those call
  * strlen() internally, which would silently truncate at the first 0x00
  * byte. Used by the display-flashing bridge relay to forward raw
@@ -289,6 +294,7 @@ static const char *effective_mode_str(void)
         : BSP_DEVICE_MODE_STR;
 }
 
+#ifdef BSP_DISPLAY_LINK_UART
 /* GPIO0 write happens before cutting power, so it's already correct and
  * stable for the entire down/up cycle -- strapping pins only need to be
  * settled by the time power actually comes back, not before it goes away. */
@@ -296,7 +302,7 @@ static void bridge_start_sequence(BridgeSeqAction_t action)
 {
     HAL_GPIO_WritePin(DISPLAY_DO3_GPIO_Port, DISPLAY_DO3_Pin,
                        (action == BRIDGE_ACTION_ENTER_BRIDGE) ? GPIO_PIN_RESET : GPIO_PIN_SET);
-    HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_RESET); /* 5V off */
+    HAL_GPIO_WritePin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN, GPIO_PIN_RESET); /* 5V off */
     s_bridge_seq_action = action;
     s_bridge_seq_state  = BRIDGE_SEQ_POWER_OFF;
     s_bridge_seq_start  = HAL_GetTick();
@@ -315,7 +321,7 @@ static void bridge_seq_tick(void)
 
     if (s_bridge_seq_state == BRIDGE_SEQ_POWER_OFF) {
         if (elapsed >= BRIDGE_POWER_OFF_MS) {
-            HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_SET); /* 5V on */
+            HAL_GPIO_WritePin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN, GPIO_PIN_SET); /* 5V on */
             s_bridge_seq_start = HAL_GetTick();
             s_bridge_seq_state = BRIDGE_SEQ_POWER_ON_WAIT;
         }
@@ -392,6 +398,20 @@ static int bridge_handle_command(cli_chan_t *ch, const char *line)
     }
     return 0;
 }
+#else  /* no display UART / strap lines on this board (SPUD): the bridge
+        * cannot exist. The commands still answer so a script gets an error
+        * instead of silence. */
+static void bridge_seq_tick(void) {}
+static int bridge_handle_command(cli_chan_t *ch, const char *line)
+{
+    if (strcmp(line, "display_update") == 0 || strcmp(line, "display_update_finished") == 0 ||
+        strcmp(line, "display_boot0 low") == 0 || strcmp(line, "display_boot0 high") == 0) {
+        cli_send(ch, "ERR: no display UART bridge on this board (display flashes over its own USB-C)\r\n> ");
+        return 1;
+    }
+    return 0;
+}
+#endif /* BSP_DISPLAY_LINK_UART */
 
 /* ── Command processing ──────────────────────────────────────────────────── */
 
@@ -410,6 +430,13 @@ static void process_line(cli_chan_t *ch, char *line)
      * GPIO43/44) lands here, so this is the display's log viewer. */
     if (ch == &s_uart)
         cli_sendf(&s_rtt, "[disp] %s\r\n", line);
+#endif
+#ifdef CLI_RTT
+    /* Debug: mirror every line the display sends over USB (machine mode)
+     * onto the SWD console, so the display -> STM32 direction can be
+     * watched on a board without the UART link. */
+    if (ch == &s_usb && ch->machine)
+        cli_sendf(&s_rtt, "[usb] %s\r\n", line);
 #endif
     /* '#' lines are comments/log output (the display's stm_link_log()),
      * never commands -- on any channel. */
@@ -499,6 +526,7 @@ static void process_line(cli_chan_t *ch, char *line)
                  "  hello                 — handshake reply (board, fw, proto)\r\n"
                  "  save\r\n"
                  "  help\r\n");
+        cli_send(ch, Bringup_HelpText());
         return;
     }
 
@@ -569,7 +597,7 @@ static void process_line(cli_chan_t *ch, char *line)
                   ls->enabled ? "ON" : "OFF");
 
         // cli_sendf(ch, "5V output: %s\r\n",
-        //     HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET ? "ON" : "OFF");
+        //     HAL_GPIO_ReadPin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN) == GPIO_PIN_SET ? "ON" : "OFF");
         cli_sendf(ch, "TEC output: %s\r\n",
                   HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET ? "ON" : "OFF");
 
@@ -577,6 +605,7 @@ static void process_line(cli_chan_t *ch, char *line)
                   (unsigned long)s_disp_rx_count, s_disp_rx_last);
 
         cli_sendf(ch, "USB-C: %s\r\n", USBC_StateStr());
+        cli_sendf(ch, "USB CLI channel: %s\r\n", s_usb.machine ? "machine (display said hello)" : "human (terminal)");
         cli_sendf(ch, "Display bridge: %s\r\n",
                   s_bridge_active ? "ACTIVE (flashing)"
                   : (s_bridge_seq_state != BRIDGE_SEQ_NONE) ? "power-cycling"
@@ -639,7 +668,7 @@ static void process_line(cli_chan_t *ch, char *line)
             if (ch->machine) confirm(ch, "5v"); else cli_send(ch, "ERR: busy\r\n");
             return;
         }
-        HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN, GPIO_PIN_SET);
         if (ch->machine) confirm(ch, "5v");
         else cli_send(ch, "OK 5V output enabled\r\n");
         return;
@@ -649,7 +678,7 @@ static void process_line(cli_chan_t *ch, char *line)
             if (ch->machine) confirm(ch, "5v"); else cli_send(ch, "ERR: busy\r\n");
             return;
         }
-        HAL_GPIO_WritePin(M6_EN_GPIO_Port, M6_EN_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN, GPIO_PIN_RESET);
         if (ch->machine) confirm(ch, "5v");
         else cli_send(ch, "OK 5V output disabled\r\n");
         return;
@@ -897,6 +926,8 @@ static void process_line(cli_chan_t *ch, char *line)
         return;
     }
 
+    if (Bringup_Process(line, cli_bringup_out, ch)) return;
+
     cli_sendf(ch, "ERR: unknown command: '%s' (type 'help')\r\n", line);
 }
 
@@ -967,7 +998,7 @@ static void send_state(cli_chan_t *ch)
     float wavelength = g_crystal_wl_k * g_crystal_pid.setpoint + g_crystal_wl_m;
     float temp, output;
     TEC_Control_GetState(TEC_CRYSTAL, &temp, &output);
-    uint8_t v5_on = (HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET) ? 1u : 0u;
+    uint8_t v5_on = (HAL_GPIO_ReadPin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN) == GPIO_PIN_SET) ? 1u : 0u;
     uint8_t crystal_tec_on = (HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET) ? 1u : 0u;
 
     cli_sendf(ch, "set device.mode %s\r\n", effective_mode_str());
@@ -999,7 +1030,7 @@ static void confirm(cli_chan_t *ch, const char *key)
     } else if (strcmp(key, "laser") == 0) {
         cli_send(ch, Laser_Control_GetState()->enabled ? "laser on\r\n" : "laser off\r\n");
     } else if (strcmp(key, "5v") == 0) {
-        cli_send(ch, HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET ? "5v on\r\n" : "5v off\r\n");
+        cli_send(ch, HAL_GPIO_ReadPin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN) == GPIO_PIN_SET ? "5v on\r\n" : "5v off\r\n");
     } else if (strcmp(key, "crystal.tec") == 0) {
         cli_send(ch, HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET ? "crystal.tec on\r\n" : "crystal.tec off\r\n");
     }
@@ -1010,7 +1041,7 @@ static void cli_sync_display(void)
     const LaserState_t *ls = Laser_Control_GetState();
     float wavelength = g_crystal_wl_k * g_crystal_pid.setpoint + g_crystal_wl_m;
     float temp, output;
-    uint8_t v5_on = (HAL_GPIO_ReadPin(M6_EN_GPIO_Port, M6_EN_Pin) == GPIO_PIN_SET) ? 1u : 0u;
+    uint8_t v5_on = (HAL_GPIO_ReadPin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN) == GPIO_PIN_SET) ? 1u : 0u;
     char buf[40];
 
     /* Lets one shared display firmware binary show the right UI for
@@ -1247,6 +1278,7 @@ void CLI_Process(void)
             return;
         }
 
+#ifdef BSP_DISPLAY_LINK_UART
         /* USB -> UART (PC -> ESP32), batched: BSP_DISPLAY_Send() is a
          * 100ms-timeout blocking HAL_UART_Transmit() -- at 115200 baud,
          * 256 bytes takes ~22ms, comfortably under that limit. Draining
@@ -1278,6 +1310,7 @@ void CLI_Process(void)
             }
         }
 
+#endif
         return;
     }
 

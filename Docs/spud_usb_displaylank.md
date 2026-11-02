@@ -1,6 +1,6 @@
 # SPUD — USB-länk mellan STM32 och display
 
-**Status:** proof of concept verifierad på UGN 2026-10-09 (se §11). Länken, protokollet och 5V-styrningen via CC fungerar på riktig hårdvara; SPUD-specifik hårdvara (§3.2) återstår.
+**Status:** proof of concept verifierad på UGN 2026-10-09 (§11) och på det första SPUD-kortet 2026-11-02 (§12). Länken, protokollet och 5V-styrningen via CC fungerar på riktig hårdvara; SPUD-specifik hårdvara (§3.2) återstår.
 **Datum:** 2026-10-08, uppdaterad 2026-10-09 (ersätter utkastet från 2026-10-06)
 **Kodbas:** gren `usb-c-Test`, skapad från `origin/dev_fj` 2026-10-08 (den firmware som sitter på UGN-kortet). `main` saknar sex commits från `dev_fj`.
 **Gäller:** SPUD-kortet (nästa kort efter UGN) och `Laserfabriken_Display`
@@ -261,3 +261,56 @@ Proof of concept på befintligt UGN-kort, utan omlödning. Uppställning: barrel
 **Kvirk på UGN:** med en dator i och 5V-regulatorn av matas kortets 5V-skena av datorn, även med barrel-jacken i. Ofarligt men oavsiktligt; SPUD:s backströmsspärr tar bort det.
 
 **Inte verifierat / kvar till SPUD:** Try.SNK mot DRP-dator, backströmsspärr, 5V-läget under reset/flashning, strömväg och barrel-detekt (§3.2 punkt 4–5).
+
+## 12. Verifierat på SPUD (2026-11-02)
+
+Första SPUD-kortet (STM32G431RB, HiAx-projekt "Laserfabriken SPUD"), tom flash
+vid leverans. Uppställning: 12 V i barrel-jacken, ST-Link V3 på M19 (REDfit),
+displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README §4.2).
+
+**Hårdvarufakta och åtgärder:**
+- **BOOT0 (PB8) är oansluten på SPUD** (HiAx: `-`), på UGN ligger den mot jord via
+  R19 10 kΩ. Flytande läses den hög och chippet går till ROM-bootloadern vid varje
+  reset, även med giltig firmware i flash. Löst på det här kortet med option bytes:
+  `nSWBOOT0=0`, `nBOOT0=1` (FLASH_OPTR 0xFFEFF8AA → 0xFBEFF8AA, via OpenOCD
+  `stm32l4x option_write 0 0x20 0x08000000 0x0C000000` + `option_load`). Chippet startar
+  nu alltid från flash; DFU nås via ST-Link eller ett framtida CLI-hopp till
+  bootloadern. **Nästa kortrevision: 10 kΩ pulldown på BOOT0.**
+- **EN_5V_USB (PB12) startar låg.** CubeMX-exporten hade `GPIO_PIN_SET`; ändrat till
+  `RESET` i `.ioc` och `gpio.c` så 5V på USB-C bara slås på efter CC-detektering.
+  Regulatorn M16 (TPS62173, 0,5 A) har ingen extern pulldown på EN; vad som händer
+  när MCU:n inte driver pinnen är inte mätt.
+- **Kristall-TEC:n (M2) är en strömkälla**, inte spänningsmatad som UGN:s buck:
+  Iout ≈ 2,52 A − VDAC (0 V → 2,5 A, 2,5 V → 0 A). Mätning: Vmeas = 0,254·VOUT,
+  Imeas = 0,767 V/A (INA181A2 över 0,02 Ω). Värdena är avlästa ur HiAx-modulens
+  schema, inte bänkmätta. `BSP_TEC_EstimateVoltage()` gäller inte SPUD.
+- **PC7/PC8/PC9** är ingångar i `.ioc` men `DIGITAL.DO` i HiAx-allokeringen. Oavgjort.
+
+**Verifierat:**
+
+| Test | Resultat |
+|---|---|
+| Firmware startar från flash efter option-byte-ändringen (PC i 0x0800xxxx) | ✅ |
+| SWD-konsol (RTT) och CLI över ST-Link | ✅ |
+| LASER_EN/PG (PA0/PA1, M15 → plint M6): EN=1 → PG=1, EN=0 → PG=0 | ✅ |
+| STAGE_EN/PG (PB15/PC6, M4 → Molex M20 pin 8) | ✅ |
+| AUX_EN/PG (PB13/PB14, M18 → plint M26) | ✅ |
+| USB-C: display ger Rd på CC2 → source-roll → 5V på via PB12 | ✅ |
+| Displayen enumererar SPUD, hello, USB-kanalen i maskinläge | ✅ |
+| Hela tillståndet till displayen efter hello (visar sparade värden) | ✅ |
+| Värde satt via CLI (`set laser.power 55`) → displayen följer | ✅ |
+| Rattvridning på displayen → SPUD:s värden följer (55→59 %, 1554,39→1545,00 nm) | ✅ |
+| Knapp på displayen → `laser on` når SPUD | ✅ |
+| USART2 (laser) / LPUART1 (stage) loopback | ⏳ bygel TX–RX i M20 resp. M9 saknas än |
+
+**Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
+`pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud`. Debug-bygget
+speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
+
+**Notering om displayen:** den första displaymodulen gav inga encoderpulser alls
+(`# knob ev=0 a=1 b=1` konstant, drivrutinen OK) — trasig ratt i hårdvaran. Bytt
+modul fungerar. `KNOB_DEBUG` i sketchen ger den diagnostiken över länken.
+
+**Kvar på SPUD:** laserprotokollet på USART2, vad STAGE (LPUART1 + P1–P4) är,
+AUX-skenans roll, strömreglerings-modell för TEC:n med ADC2-mätningarna, NTC-
+seriemotstånd på SPUD, samt punkt 4–5 i §3.2.

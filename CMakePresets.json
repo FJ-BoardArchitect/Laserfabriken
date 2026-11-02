@@ -6,33 +6,22 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-		    "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
-            "cacheVariables": {
-            }
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {}
         },
-        {
-            "name": "Debug",
-            "inherits": "default",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "Release",
-            "inherits": "default",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        }
+        { "name": "UGN-Debug",    "inherits": "default", "displayName": "UGN, Debug (RTT console)",  "cacheVariables": { "BOARD": "UGN",  "CMAKE_BUILD_TYPE": "Debug" } },
+        { "name": "UGN-Release",  "inherits": "default", "displayName": "UGN, Release",              "cacheVariables": { "BOARD": "UGN",  "CMAKE_BUILD_TYPE": "Release" } },
+        { "name": "SPUD-Debug",   "inherits": "default", "displayName": "SPUD, Debug (RTT console)", "cacheVariables": { "BOARD": "SPUD", "CMAKE_BUILD_TYPE": "Debug" } },
+        { "name": "SPUD-Release", "inherits": "default", "displayName": "SPUD, Release",             "cacheVariables": { "BOARD": "SPUD", "CMAKE_BUILD_TYPE": "Release" } },
+        { "name": "Debug",   "inherits": "UGN-Debug",   "displayName": "alias for UGN-Debug (older docs/scripts)" },
+        { "name": "Release", "inherits": "UGN-Release", "displayName": "alias for UGN-Release (older docs/scripts)" }
     ],
     "buildPresets": [
-        {
-            "name": "Debug",
-            "configurePreset": "Debug"
-        },
-        {
-            "name": "Release",
-            "configurePreset": "Release"
-        }
+        { "name": "UGN-Debug",    "configurePreset": "UGN-Debug" },
+        { "name": "UGN-Release",  "configurePreset": "UGN-Release" },
+        { "name": "SPUD-Debug",   "configurePreset": "SPUD-Debug" },
+        { "name": "SPUD-Release", "configurePreset": "SPUD-Release" },
+        { "name": "Debug",        "configurePreset": "Debug" },
+        { "name": "Release",      "configurePreset": "Release" }
     ]
 }

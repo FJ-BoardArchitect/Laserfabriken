@@ -67,6 +67,7 @@
 #define BSP_SPI_BUS         (&hspi3)
 #define BSP_ADC_CS_PORT     ADC_CS_GPIO_Port
 #define BSP_ADC_CS_PIN      ADC_CS_Pin
+#define BSP_LASER_DAC8562S  1                  /* bsp_laser.c drives the DAC8562S */
 #define BSP_LASER_CS_PORT   DAC_CS_GPIO_Port   /* reserved — DAC8562S on Spudkortet */
 #define BSP_LASER_CS_PIN    DAC_CS_Pin
 
@@ -148,5 +149,18 @@
 #define BSP_ADS1220_DR_20SPS   0x00u
 #define BSP_ADS1220_DR_90SPS   0x40u
 #define BSP_ADS1220_DATA_RATE  BSP_ADS1220_DR_20SPS
+
+/* ── Bring-up tables (Core/Src/app/bringup.c: CLI 'pin' and 'uart') ─────────
+ * X(name, cubemx_label, writable). M6_EN is owned by usbc_port, TEC_EN by
+ * tec_control: read-only here. UGN has no spare UART. */
+#define BSP_BRINGUP_PINS(X) \
+    X("m6_en",       M6_EN,       0) \
+    X("tec_en",      TEC_EN,      0) \
+    X("tec_pg",      TEC_PG,      0) \
+    X("display_do1", DISPLAY_DO1, 1) \
+    X("display_do2", DISPLAY_DO2, 1) \
+    X("display_do3", DISPLAY_DO3, 1)
+
+#define BSP_BRINGUP_UARTS(X)
 
 #endif /* BSP_CONFIG_H */

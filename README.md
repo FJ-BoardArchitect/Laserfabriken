@@ -57,7 +57,7 @@ USART1 (PA9/PA10) är en bidirektionell länk till ESP32-S3-displayen:
 
 ## 3. UGN vs. Spudkortet
 
-`bsp_config.h`s egen kommentar sammanfattar det kort: **"the ONLY file that changes when switching between boards."** Allt hårdvarunära (pinnar, vilken DAC-kanal, vilken SPI chip-select) är samlat där — resten av koden pratar bara med `BSP_*`-makron.
+`boards/<kort>/bsp_config.h` (tidigare `Core/Inc/bsp/bsp_config.h`) sammanfattar det kort: **"the ONLY file that changes when switching between boards"** — plus det CubeMX genererar i `boards/<kort>/Core/`, se §4.2. Allt hårdvarunära (pinnar, vilken DAC-kanal, vilken SPI chip-select) är samlat där — resten av koden pratar bara med `BSP_*`-makron.
 
 | | UGN (nuvarande kort) | Spudkortet (nästa kort) |
 |---|---|---|
@@ -112,30 +112,74 @@ cmake --version
 ninja --version
 ```
 
-### 4.2 Konfigurera och bygga
+### 4.2 Konfigurera och bygga — välj kort
 
-Projektet har färdiga CMake-presets (`CMakePresets.json`):
+Ett källträd, två kort. Kortet väljs på kommandoraden via CMake-presets
+(`CMakePresets.json`): `UGN-Debug`, `UGN-Release`, `SPUD-Debug`, `SPUD-Release`.
+Debug-byggena har SWD-konsolen (RTT) inkompilerad, se `Tools/rtt-cli/`.
 
 ```bash
 export PATH="/usr/local/arm-none-eabi/bin:$PATH"   # justera vid behov
 
-cmake --preset Debug
-cmake --build --preset Debug
+cmake --preset SPUD-Debug && cmake --build --preset SPUD-Debug
+cmake --preset UGN-Release && cmake --build --preset UGN-Release
 ```
 
-Resultatet hamnar i `build/Debug/laserfabriken_v2.elf` och `.bin`. Ett lyckat bygge avslutas med en minnesrapport (RAM/FLASH-användning) — inget felmeddelande betyder att allt gick bra.
+Resultatet hamnar i `build/<preset>/laserfabriken_spud.bin` respektive
+`laserfabriken_ugn.bin` (plus `.elf`), så de två korten kan aldrig blandas ihop.
+Utan presets: `cmake -DBOARD=SPUD -DCMAKE_BUILD_TYPE=Debug ...`. De gamla
+presetnamnen `Debug`/`Release` finns kvar som alias för UGN.
+
+Så här är trädet organiserat (sedan 2026-11-02):
+
+```
+boards/ugn/    laserfabriken_v2.ioc, Core/Src + Core/Inc (CubeMX-genererat), bsp_config.h
+boards/spud/   Laserfabriken_SPUD.ioc, Core/Src + Core/Inc (CubeMX-genererat), bsp_config.h
+Core/Src/app   delat applikationslager (tec_control, cli, params, usbc_port, bringup ...)
+Core/Src/bsp   delat BSP; alla pinnar/konstanter kommer från boards/<kort>/bsp_config.h
+Drivers/, Middlewares/, USB_Device/   delade (USB_Device är handändrad ST-mall)
+```
+
+Koden får `BOARD_UGN` eller `BOARD_SPUD` som define, men det ska normalt inte
+behövas: kortskillnader hör hemma i `boards/<kort>/bsp_config.h`.
+
+**CubeMX:** öppna `boards/<kort>/*.ioc` och generera som vanligt. CubeMX lägger då
+`Drivers/`, `Middlewares/`, `USB_Device/`, `cmake/` m.m. bredvid `.ioc`-filen —
+de är gitignorerade och används inte; bygget tar bara `boards/<kort>/Core/`.
+Handändringar i `USB_Device/App/` (banner på DTR, SEND_BREAK-stöd m.m.) ligger
+alltså i rotens kopia och påverkas inte av en omgenerering.
+
+Ett lyckat bygge avslutas med en minnesrapport (RAM/FLASH-användning) — inget felmeddelande betyder att allt gick bra.
 
 Om du använder VS Code: `.vscode/settings.json` sätter redan rätt `PATH` för både `cmake.configureEnvironment` och `cmake.buildEnvironment` (båda krävs — den ena räcker inte, se förklaring i filen/kommentarerna i den här historiken om du undrar varför).
 
 ### 4.3 Flasha
 
-**Under utvecklingen har flashning i praktiken skett med STM32CubeProgrammer** (ST:s eget GUI-verktyg, finns för Linux via ST:s hemsida). Öppna `build/Debug/laserfabriken_v2.bin` (eller `.elf`), välj rätt anslutning (ST-Link/SWD om ett ST-Link-probe är inkopplat, annars USB-DFU) och tryck Flash.
+**Nya kort, rekommenderad väg:** `Tools/flash-board/flash_board.py` över ST-Link.
+Scriptet läser hårdvaran innan det skriver något: det identifierar kortet på
+BOOT0-pinnen (UGN har 10 kΩ pulldown, SPUD har pinnen oansluten), väljer rätt
+binär, flashar, verifierar, sätter option bytes på SPUD så chippet startar från
+flash, och kontrollerar att processorn kör i flashen efteråt. Det vägrar om
+binären inte matchar kortet.
+
+```bash
+python3 Tools/flash-board/flash_board.py --probe-only        # bara identifiera
+python3 Tools/flash-board/flash_board.py                     # Release-bygget för det kort som sitter i
+python3 Tools/flash-board/flash_board.py --build Debug       # Debug-bygget (RTT-konsol)
+python3 Tools/flash-board/flash_board.py --board SPUD --yes  # utan frågor, med kontroll mot hårdvaran
+```
+
+Identifieringen bygger på en skillnad som råkar finnas i dag. Nästa kortrevision bör
+få en egen BOARD_ID-pinne (pullup på ena kortet, pulldown på andra), särskilt om
+SPUD får BOOT0-pulldown; då läggs den till i `SIGNATURES` i scriptet.
+
+**Under utvecklingen har flashning i praktiken skett med STM32CubeProgrammer** (ST:s eget GUI-verktyg, finns för Linux via ST:s hemsida). Öppna `build/<preset>/laserfabriken_<kort>.bin` (eller `.elf`), välj rätt anslutning (ST-Link/SWD om ett ST-Link-probe är inkopplat, annars USB-DFU) och tryck Flash.
 
 **Windows, utan ST:s proprietära mjukvara:** se `Docs/firmware_update_guide.md` — beskriver flashning med enbart fri/öppen källkod (`dfu-util`, Zadig/WinUSB), inklusive avsnittet "For developers" om ST-Link/SWD mot ett riktigt UGN-kort via `ProgPAD`.
 
 Alternativ, kommandoradsbaserad väg (samma ST-Link/SWD-anslutning som ovan, mot UGN-kortets `ProgPAD`-header):
 ```bash
-st-flash write build/Debug/laserfabriken_v2.bin 0x08000000
+st-flash --reset write build/SPUD-Debug/laserfabriken_spud.bin 0x08000000   # eller UGN-Debug/laserfabriken_ugn.bin
 ```
 eller `Tools/firmware-updater --target=stlink`.
 

@@ -1,5 +1,7 @@
 #include "bsp_laser.h"
 #include "bsp_config.h"
+
+#ifdef BSP_LASER_DAC8562S
 #include "stm32g4xx_hal.h"
 #include <stdint.h>
 
@@ -55,3 +57,12 @@ void BSP_Laser_Disable(void)
 {
     dac8562_write(0u, 0u);
 }
+
+#else  /* no DAC8562S (SPUD): the laser is a serial module on BSP_LASER_UART.
+        * Protocol not decided yet -- these are stubs so laser_control.c links.
+        * Bring-up of LASER_EN/LASER_PG and the UART is done from the CLI
+        * ('pin', 'uart', see bringup.c). */
+void BSP_Laser_Init(void)              {}
+void BSP_Laser_SetCurrent(float amps)  { (void)amps; }
+void BSP_Laser_Disable(void)           {}
+#endif

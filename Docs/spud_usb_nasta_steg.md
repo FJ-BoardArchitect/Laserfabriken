@@ -87,8 +87,8 @@ Plan steg 3 (STM32 skickar hela tillståndet efter hello + `get all`) och steg 4
 
 ```bash
 # STM32 (i Laserfabriken/)
-cmake --build --preset Debug
-st-flash --reset write build/Debug/laserfabriken_v2.bin 0x08000000
+cmake --preset SPUD-Debug && cmake --build --preset SPUD-Debug      # eller UGN-Debug
+st-flash --reset write build/SPUD-Debug/laserfabriken_spud.bin 0x08000000
 python3 Tools/rtt-cli/rtt_cli.py status                 # CLI över ST-Link
 python3 Tools/rtt-cli/rtt_cli.py "hello display fw=1.0.0 proto=1" "set laser.power 0"
 python3 Tools/rtt-cli/rtt_cli.py --listen 10            # bara lyssna (displayens logg)
