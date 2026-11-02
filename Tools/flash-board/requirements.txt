@@ -1,0 +1,14 @@
+# Tools/flash-board/flash_board.py -- Python requirements
+#
+# No pip packages: the script only uses the standard library
+# (argparse, os, re, subprocess, sys). `pip install -r requirements.txt`
+# is therefore a no-op and succeeds on purpose.
+#
+# What it does need, outside pip:
+#   python3 >= 3.8
+#   openocd  >= 0.12   in PATH (stm32g4x target + stlink interface configs
+#                      ship with it; Arch: pacman -S openocd,
+#                      Debian/Ubuntu: apt install openocd)
+#   an ST-Link probe (V2 or V3) on the board's SWD connector, board powered
+#
+# Tools/rtt-cli/rtt_cli.py has the same requirements and no pip packages either.
