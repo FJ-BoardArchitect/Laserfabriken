@@ -304,6 +304,7 @@ displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README
 | LPUART1 (laser, ZH M9) / USART2 (stage, Molex M20) korskopplade, M20.3→M9.3 och M9.2→M20.2 (2026-11-03) | ✅ 18, 87 och 8 byte (binärt) fram i båda riktningarna som hela ramar, echo tillbaka, 0 fel |
 | UART-mottagning via DMA + IDLE-interrupt (`uart_rx.c`), full duplex | ✅ |
 | ADS1220 på SPI3, NTC på M14: 23,9 °C / 10,4 kΩ i rumstemperatur (2026-11-03) | ✅ efter SPI-fasfix, se nedan |
+| Första TEC-körningen, strömläge, börvärde 20 °C från 23,3 °C (2026-11-03) | ✅ 20,3 °C efter 10 s, håller 20,2 ±0,1 (ren P, Ki=0); POLARITY=0 kyler; uppmätt I ≈ begärd + 0,03 A; PG hög när EN hög |
 
 **Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
 `pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|loop|baud|stats`, `uart monitor on|off`,
@@ -320,7 +321,11 @@ Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-
 (negativ strömbegäran = ingen). Vmeas/Imeas läses pollat på ADC2 (247 cykler samplingstid,
 kalibrering vid första läsning); `crystal.tec_voltage` till displayen är nu uppmätt spänning.
 CLI: `tec` visar EN/PG/polaritet/DAC/modell/uppmätt, `status` har raden "TEC drive".
-Polaritetspinnens riktning (0 = cool antas) är **inte** verifierad på SPUD än.
+Polaritetspinnen: **0 = kyla verifierat** 2026-11-03. Uppmätt ström låg konsekvent ~0,03 A
+över begärd (0,018 → 0,049, 0,033 → 0,061), dvs. konstanten 2,52 A i modellen är troligen
+~2,55 på det här exemplaret; justera `BSP_TEC_IOUT_AT_0V_A` när det spelar roll. Vmeas visar
+~0,07 V vid kyla med 50 mA men 1,2 V vid värme och 0,96 V kvar efter avstängning — Vmeas
+sitter före polaritetsväxlaren och är inte rakt av TEC-spänningen i värmeläge; ej utrett.
 
 **ADS1220 (SPI3):** SPUD:s `.ioc` saknade `SPI3.CLKPhase`, så CubeMX genererade
 SPI-läge 0 (första flanken). ADS1220 kräver läge 1 (andra flanken), som UGN har.
@@ -343,5 +348,5 @@ firmwaren var upptagen i ett kommando; nu 256, och `rtt_cli.py` väntar på prom
 modul fungerar. `KNOB_DEBUG` i sketchen ger den diagnostiken över länken.
 
 **Kvar på SPUD:** laserprotokollet på LPUART1 (ZH M9), vad STAGE (USART2 på Molex M20 + P1–P4) är,
-AUX-skenans roll, första TEC-körningen (verifiera polaritet, strömmodellen mot uppmätt I,
-sätt `BSP_TEC_IMAX_A` efter elementet), samt punkt 4–5 i §3.2.
+AUX-skenans roll, `BSP_TEC_IMAX_A` efter elementets märkström, Ki för kristall-PID:n (ren P
+nu, lägger sig 0,2 °C ifrån), Vmeas-beteendet i värmeläge, samt punkt 4–5 i §3.2.
