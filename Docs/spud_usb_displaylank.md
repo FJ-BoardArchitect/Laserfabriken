@@ -301,11 +301,14 @@ displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README
 | Värde satt via CLI (`set laser.power 55`) → displayen följer | ✅ |
 | Rattvridning på displayen → SPUD:s värden följer (55→59 %, 1554,39→1545,00 nm) | ✅ |
 | Knapp på displayen → `laser on` når SPUD | ✅ |
-| USART2 (laser) / LPUART1 (stage) korskopplade, M20.3→M9.3 och M9.2→M20.2 (2026-11-03) | ✅ 18, 87 och 8 byte (binärt) fram i båda riktningarna som hela ramar, echo tillbaka, 0 fel |
+| LPUART1 (laser, ZH M9) / USART2 (stage, Molex M20) korskopplade, M20.3→M9.3 och M9.2→M20.2 (2026-11-03) | ✅ 18, 87 och 8 byte (binärt) fram i båda riktningarna som hela ramar, echo tillbaka, 0 fel |
 | UART-mottagning via DMA + IDLE-interrupt (`uart_rx.c`), full duplex | ✅ |
 
 **Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
-`pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud|echo on|off|stats`.
+`pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud|echo on|off|stats`,
+`uart duplex [text]` (båda portarna sänder samtidigt, visar tx och rx per port).
+**Namnen rättade 2026-11-03:** lasern sitter på ZH M9 (LPUART1 PC1/PC0), stage på Molex M20
+(USART2 PA2/PA3) — `.ioc`-etiketterna var spegelvända.
 Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
 
 **Lärdomar från UART-testet:** (1) HAL:en rapporterar en IDLE-händelse med hela
@@ -321,6 +324,6 @@ firmwaren var upptagen i ett kommando; nu 256, och `rtt_cli.py` väntar på prom
 (`# knob ev=0 a=1 b=1` konstant, drivrutinen OK) — trasig ratt i hårdvaran. Bytt
 modul fungerar. `KNOB_DEBUG` i sketchen ger den diagnostiken över länken.
 
-**Kvar på SPUD:** laserprotokollet på USART2, vad STAGE (LPUART1 + P1–P4) är,
+**Kvar på SPUD:** laserprotokollet på LPUART1 (ZH M9), vad STAGE (USART2 på Molex M20 + P1–P4) är,
 AUX-skenans roll, strömreglerings-modell för TEC:n med ADC2-mätningarna, NTC-
 seriemotstånd på SPUD, samt punkt 4–5 i §3.2.

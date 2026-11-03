@@ -142,10 +142,51 @@ static void uart_send(const uart_t *u, const uint8_t *d, size_t n, bringup_out_f
     OUT("  tx %2u bytes\r\n", (unsigned)n);
 }
 
+/* Transmit on every table UART at the same instant (interrupt-driven TX on
+ * all of them), then show what each port received: a full-duplex check. */
+static void cmd_duplex(const char *text, bringup_out_fn out, void *ctx)
+{
+    static uint8_t msg[8][64];          /* must outlive the IT transfers */
+    size_t n_ports = 0;
+    for (const uart_t *u = s_uarts; u->name && n_ports < 8; u++) n_ports++;
+    if (n_ports == 0) { out(ctx, "no bring-up UARTs on this board\r\n"); return; }
+    for (size_t i = 0; i < n_ports; i++) rx_flush(&s_uarts[i]);
+    size_t len[8];
+    for (size_t i = 0; i < n_ports; i++) {
+        len[i] = (size_t)snprintf((char *)msg[i], sizeof msg[i], "%s-from-%s\r\n", text, s_uarts[i].name);
+    }
+    out(ctx, "duplex: all ports transmit at the same time\r\n");
+    for (size_t i = 0; i < n_ports; i++) {
+        if (HAL_UART_Transmit_IT(s_uarts[i].h, msg[i], (uint16_t)len[i]) != HAL_OK)
+            OUT("  %s tx: HAL busy/error\r\n", s_uarts[i].name);
+    }
+    uint32_t t0 = HAL_GetTick();
+    for (;;) {                           /* wait for every transmitter to finish */
+        bool busy = false;
+        for (size_t i = 0; i < n_ports; i++)
+            if (s_uarts[i].h->gState != HAL_UART_STATE_READY) busy = true;
+        if (!busy || HAL_GetTick() - t0 > 2000) break;
+#ifdef BSP_UART_RX_PORTS
+        UartRx_Process();
+#endif
+    }
+    for (size_t i = 0; i < n_ports; i++)
+        OUT("  %s tx %2u: %.*s\r\n", s_uarts[i].name, (unsigned)len[i], (int)len[i] - 2, (const char *)msg[i]);
+    for (size_t i = 0; i < n_ports; i++) {
+        OUT("  %s:\r\n", s_uarts[i].name);
+        dump_rx(&s_uarts[i], 300, out, ctx);
+    }
+}
+
 static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
 {
     char *name = strtok(args, " ");
     if (!name) { list_uarts(out, ctx); return true; }
+    if (strcmp(name, "duplex") == 0) {
+        char *text = strtok(0, "");
+        cmd_duplex(text && *text ? text : "hello", out, ctx);
+        return true;
+    }
     const uart_t *u = find_uart(name);
     if (!u) { OUT("ERR: no uart '%s' (try 'uart')\r\n", name); return true; }
     char *sub = strtok(0, " ");
@@ -264,6 +305,6 @@ const char *Bringup_HelpText(void)
 {
     return "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
            "  uart [<name> baud <n> | send <text> | hex <bytes> | listen <s> | loop |\r\n"
-           "        echo on|off | stats]\r\n"
+           "        echo on|off | stats]   uart duplex [<text>]  — all ports TX at once\r\n"
            "                        — bring-up: raw access to the board's extra UARTs\r\n";
 }

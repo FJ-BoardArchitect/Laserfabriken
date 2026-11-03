@@ -17,6 +17,8 @@
  *   uart <name> loop            TX->RX jumper test: send a pattern, expect it back
  *   uart <name> echo on|off     send every received frame straight back (DMA boards)
  *   uart <name> stats           DMA reception counters (DMA boards)
+ *   uart duplex [<text>]        every table UART transmits "<text>-from-<name>" at
+ *                               the same instant; shows tx and rx per port
  *
  * On boards with BSP_UART_RX_PORTS reception goes through uart_rx.c (DMA +
  * idle-line interrupt); "listen" then prints one line per received frame.

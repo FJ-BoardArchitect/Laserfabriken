@@ -22,10 +22,10 @@
  *   M3  DC jack    main input "V12" (net54) via bead M12.
  *   M14 PH-4A      crystal oven: GND, NTC (ADS1220 AIN0), TEC+, TEC- (via M1
  *                  polarity switch, driven by M2 constant-current buck).
- *   M20 Molex 8p   USART2 (PA2 TX / PA3 RX, .ioc labels LASER_TX/RX), four
+ *   M20 Molex 8p   USART2 (PA2 TX / PA3 RX, .ioc labels STAGE_TX/RX), four
  *                  GPIO PC7/PC8/PC9/PA8 (.ioc labels STAGE_P1..P4) and 5V from
  *                  M4 (EN=PB15 STAGE_EN, PG=PC6 STAGE_PG).
- *   M9  ZH1.5 3p   LPUART1 (PC1 TX / PC0 RX, .ioc labels STAGE_TX/RX) + GND.
+ *   M9  ZH1.5 3p   LPUART1 (PC1 TX / PC0 RX, .ioc labels LASER_TX/RX) + GND.
  *   M6  terminal   5V from M15 (EN=PA0 LASER_EN, PG=PA1 LASER_PG).
  *   M26 terminal   5V from M18 (EN=PB13 AUX_EN, PG=PB14 AUX_PG).
  *   M19 REDfit     SWD.
@@ -55,9 +55,9 @@
 
 /* ── Laser ───────────────────────────────────────────────────────────────────
  * No DAC8562S on SPUD (BSP_LASER_DAC8562S not defined -> bsp_laser.c is a
- * stub). The laser is a serial module on USART2 plus LASER_EN/LASER_PG;
+ * stub). The laser is a serial module on LPUART1 (ZH1.5 M9) plus LASER_EN/LASER_PG;
  * protocol not decided yet, see Docs/spud_usb_nasta_steg.md. */
-#define BSP_LASER_UART          (&huart2)
+#define BSP_LASER_UART          (&hlpuart1)
 #define BSP_LASER_EN_PORT       LASER_EN_GPIO_Port
 #define BSP_LASER_EN_PIN        LASER_EN_Pin
 #define BSP_LASER_PG_PORT       LASER_PG_GPIO_Port
@@ -140,11 +140,11 @@
  * Same order as BSP_BRINGUP_UARTS below. Each needs a circular RX DMA channel
  * and the UART's global interrupt enabled in the .ioc (done for both). */
 #define BSP_UART_RX_PORTS(X) \
-    X(laser, huart2) \
-    X(stage, hlpuart1)
+    X(laser, hlpuart1) \
+    X(stage, huart2)
 
 #define BSP_BRINGUP_UARTS(X) \
-    X("laser", huart2,   "USART2 PA2/PA3 -> Molex M20") \
-    X("stage", hlpuart1, "LPUART1 PC1/PC0 -> ZH1.5 M9")
+    X("laser", hlpuart1, "LPUART1 PC1/PC0 -> ZH1.5 M9") \
+    X("stage", huart2,   "USART2 PA2/PA3 -> Molex M20")
 
 #endif /* BSP_CONFIG_H */

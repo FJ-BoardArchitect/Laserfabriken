@@ -144,7 +144,7 @@ Koden får `BOARD_UGN` eller `BOARD_SPUD` som define, men det ska normalt inte
 behövas: kortskillnader hör hemma i `boards/<kort>/bsp_config.h`.
 
 **UART-mottagning över DMA** (`Core/Src/bsp/uart_rx.c`): portarna i
-`BSP_UART_RX_PORTS` (SPUD: USART2 "laser", LPUART1 "stage") tas emot i en cirkulär
+`BSP_UART_RX_PORTS` (SPUD: LPUART1 "laser" på ZH M9, USART2 "stage" på Molex M20) tas emot i en cirkulär
 DMA-buffert med ett interrupt per meddelande (IDLE-linje), inte per byte. ISR:en
 lägger varje sändningsskur som en ram i en kö; huvudloopen hämtar hela ramar med
 `UartRx_Pop()`. Fel (overrun m.m.) startar om mottagningen automatiskt. Portarna

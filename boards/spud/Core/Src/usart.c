@@ -145,19 +145,19 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PC0     ------> LPUART1_RX
     PC1     ------> LPUART1_TX
     */
-    GPIO_InitStruct.Pin = STAGE_RX_Pin;
+    GPIO_InitStruct.Pin = LASER_RX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
-    HAL_GPIO_Init(STAGE_RX_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(LASER_RX_GPIO_Port, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = STAGE_TX_Pin;
+    GPIO_InitStruct.Pin = LASER_TX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
-    HAL_GPIO_Init(STAGE_TX_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(LASER_TX_GPIO_Port, &GPIO_InitStruct);
 
     /* LPUART1 DMA Init */
     /* LPUART1_RX Init */
@@ -207,19 +207,19 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PA2     ------> USART2_TX
     PA3     ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = LASER_TX_Pin;
+    GPIO_InitStruct.Pin = STAGE_TX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-    HAL_GPIO_Init(LASER_TX_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(STAGE_TX_GPIO_Port, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = LASER_RX_Pin;
+    GPIO_InitStruct.Pin = STAGE_RX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-    HAL_GPIO_Init(LASER_RX_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(STAGE_RX_GPIO_Port, &GPIO_InitStruct);
 
     /* USART2 DMA Init */
     /* USART2_RX Init */
@@ -263,7 +263,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PC0     ------> LPUART1_RX
     PC1     ------> LPUART1_TX
     */
-    HAL_GPIO_DeInit(GPIOC, STAGE_RX_Pin|STAGE_TX_Pin);
+    HAL_GPIO_DeInit(GPIOC, LASER_RX_Pin|LASER_TX_Pin);
 
     /* LPUART1 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
@@ -286,7 +286,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PA2     ------> USART2_TX
     PA3     ------> USART2_RX
     */
-    HAL_GPIO_DeInit(GPIOA, LASER_TX_Pin|LASER_RX_Pin);
+    HAL_GPIO_DeInit(GPIOA, STAGE_TX_Pin|STAGE_RX_Pin);
 
     /* USART2 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
