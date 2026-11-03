@@ -7,6 +7,7 @@
  * exists. Tables come from the board's bsp_config.h (BSP_BRINGUP_PINS,
  * BSP_BRINGUP_UARTS).
  *
+ *   adc [<n>]                   ADS1220: raw code, volts, ohms, celsius (n samples)
  *   pin                         list all table pins with direction and level
  *   pin <name> 0|1              drive a writable pin, read it back
  *   uart                        list the table UARTs with their baud rate

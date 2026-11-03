@@ -2,6 +2,7 @@
 #include "bsp_config.h"
 #include "main.h"
 #include "uart_rx.h"
+#include "bsp_temp.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -275,9 +276,32 @@ static bool cmd_pin(char *args, bringup_out_fn out, void *ctx)
     return true;
 }
 
+static bool cmd_adc(char *args, bringup_out_fn out, void *ctx)
+{
+    long n = args && *args ? strtol(args, 0, 10) : 1;
+    if (n < 1) n = 1;
+    if (n > 20) n = 20;
+    uint8_t r[4];
+    BSP_Temp_ReadRegs(r);
+    OUT("ADS1220 regs: 0=0x%02X 1=0x%02X 2=0x%02X 3=0x%02X  (want 0=0x81 AIN0-AVSS g1 bypass, 2=0x50 REFP0 50/60Hz)\r\n",
+        r[0], r[1], r[2], r[3]);
+    for (long i = 0; i < n; i++) {
+        temp_sample_t s = BSP_Temp_Sample();
+        OUT("adc raw=%8ld (0x%06lX)  %.4f V  %.1f ohm  %.2f C\r\n",
+            (long)s.raw, (unsigned long)(s.raw & 0xFFFFFF), s.volts, s.ohms, s.celsius);
+        if (n > 1) HAL_Delay(100);
+    }
+    return true;
+}
+
 bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 {
     char buf[128];
+    if (strncmp(line, "adc", 3) == 0 && (line[3] == '\0' || line[3] == ' ')) {
+        strncpy(buf, line + 3, sizeof buf - 1); buf[sizeof buf - 1] = '\0';
+        char *a = buf; while (*a == ' ') a++;
+        return cmd_adc(a, out, ctx);
+    }
     if (strncmp(line, "pin", 3) == 0 && (line[3] == '\0' || line[3] == ' ')) {
         strncpy(buf, line + 3, sizeof buf - 1); buf[sizeof buf - 1] = '\0';
         return cmd_pin(buf, out, ctx);
@@ -291,7 +315,8 @@ bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 
 const char *Bringup_HelpText(void)
 {
-    return "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
+    return "  adc [<n>]             — bring-up: ADS1220 raw code, V, ohm, C (n samples)\r\n"
+           "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
            "  uart [<name> baud <n> | send <text> | hex <bytes> | loop | stats]\r\n"
            "  uart duplex [<text>]  — all ports TX at once;  uart monitor on|off\r\n"
            "                        — received frames print as \"<port> rx <n>: <hex>\"\r\n"

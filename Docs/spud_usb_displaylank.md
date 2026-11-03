@@ -303,6 +303,7 @@ displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README
 | Knapp på displayen → `laser on` når SPUD | ✅ |
 | LPUART1 (laser, ZH M9) / USART2 (stage, Molex M20) korskopplade, M20.3→M9.3 och M9.2→M20.2 (2026-11-03) | ✅ 18, 87 och 8 byte (binärt) fram i båda riktningarna som hela ramar, echo tillbaka, 0 fel |
 | UART-mottagning via DMA + IDLE-interrupt (`uart_rx.c`), full duplex | ✅ |
+| ADS1220 på SPI3, NTC på M14: 23,9 °C / 10,4 kΩ i rumstemperatur (2026-11-03) | ✅ efter SPI-fasfix, se nedan |
 
 **Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
 `pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|loop|baud|stats`, `uart monitor on|off`,
@@ -312,6 +313,13 @@ Inget skrivs för det som sändes. Raderna går bara till terminaler, aldrig til
 **Namnen rättade 2026-11-03:** lasern sitter på ZH M9 (LPUART1 PC1/PC0), stage på Molex M20
 (USART2 PA2/PA3) — `.ioc`-etiketterna var spegelvända.
 Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
+
+**ADS1220 (SPI3):** SPUD:s `.ioc` saknade `SPI3.CLKPhase`, så CubeMX genererade
+SPI-läge 0 (första flanken). ADS1220 kräver läge 1 (andra flanken), som UGN har.
+Symtomet var registervärden förskjutna exakt en bit vid återläsning (skrivet 0x81
+0x04 0x50, läst 0xC0 0x82 0x28) och en negativ råkod, −144 °C. `adc [n]` i CLI:n
+visar register, råkod, volt, ohm och °C. Seriemotståndet 10 kΩ från UGN stämmer med
+mätningen (1,48 V av 2,9 V vid 10,4 kΩ).
 
 **Lärdomar från UART-testet:** (1) HAL:en rapporterar en IDLE-händelse med hela
 buffertstorleken när DMA-räknaren är orörd, och hårdvaran höjer en sådan direkt

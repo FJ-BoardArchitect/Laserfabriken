@@ -87,6 +87,17 @@ static void ads_write_regs(uint8_t start_reg, uint8_t *data, uint8_t n)
     ads_cs_high();
 }
 
+#define ADS1220_CMD_RREG(reg, n)        ((uint8_t)(0x20u | ((reg) << 2) | ((n) - 1u)))
+
+void BSP_Temp_ReadRegs(uint8_t regs[4])
+{
+    uint8_t cmd = ADS1220_CMD_RREG(0, 4);
+    ads_cs_low();
+    ads_write(&cmd, 1);
+    ads_read(regs, 4);
+    ads_cs_high();
+}
+
 /* ── Raw ADC read ────────────────────────────────────────────────────────── */
 
 static int32_t ads_read_raw(void)
@@ -140,6 +151,16 @@ void BSP_Temp_Init(void)
     ads_write_regs(0, cfg, 3);
 
     ads_send_cmd(ADS1220_CMD_START);
+}
+
+temp_sample_t BSP_Temp_Sample(void)
+{
+    temp_sample_t s;
+    s.raw     = ads_read_raw();
+    s.volts   = g_ntc_vref_v * ((float)s.raw / (float)0x7FFFFF);
+    s.ohms    = raw_to_resistance(s.raw);
+    s.celsius = resistance_to_celsius(s.ohms);
+    return s;
 }
 
 float BSP_Temp_Read(TempChannel_t ch)
