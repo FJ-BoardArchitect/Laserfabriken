@@ -45,8 +45,36 @@ SIGNATURES = {
     (1, 0): "SPUD",   # BOOT0 floating: follows whatever pull the MCU applies
 }
 
+def openocd_telnet(cmds, timeout):
+    """Send the commands to an OpenOCD that is already running (e.g. rtt_cli.py
+    --server) over its telnet port; return its output or None if none runs."""
+    import socket
+    try:
+        s = socket.create_connection(("127.0.0.1", 4444), timeout=0.3)
+    except OSError:
+        return None
+    s.settimeout(timeout)
+    def until_prompt():
+        buf = b""
+        while not buf.endswith(b"> "):
+            chunk = s.recv(4096)
+            if not chunk: break
+            buf += chunk
+        return buf.decode(errors="replace")
+    out = until_prompt()
+    for c in cmds:
+        s.sendall((c + "\n").encode())
+        out += until_prompt()
+    s.close()
+    return out
+
 def openocd(cmds, timeout=60):
-    """Run OpenOCD with the given -c commands, return (ok, output)."""
+    """Run the commands in OpenOCD, return (ok, output). Uses an already running
+    OpenOCD when one listens on telnet port 4444, else starts a private one."""
+    out = openocd_telnet(cmds, timeout)
+    if out is not None:
+        ok = "Error" not in out.replace("Error: stm32l4x option load failed", "")
+        return ok, out
     argv = list(OPENOCD)
     for c in ["init"] + cmds + ["shutdown"]:
         argv += ["-c", c]
@@ -85,10 +113,19 @@ def probe():
         f"mww {GPIOB_MODER:#x} [expr {{[mrw {GPIOB_MODER:#x}] | 0x00030000}}]",   # back to analog
         "resume",
     ]
+    cmds.insert(1, "echo \"IDCODE=[format 0x%08x [mrw 0xE0042000]]\"")
     ok, out = openocd(cmds)
     r = {}
-    r["voltage"] = float(need(out, r"Target voltage: ([0-9.]+)").group(1))
-    r["chip"]    = need(out, r"\] (Cortex-M4 r\dp\d) processor").group(1)
+    # A private OpenOCD prints voltage and core at init; a shared one (telnet)
+    # does not, so fall back to the DBGMCU ID code for the chip.
+    m = re.search(r"Target voltage: ([0-9.]+)", out)
+    r["voltage"] = float(m.group(1)) if m else None
+    m = re.search(r"\] (Cortex-M4 r\dp\d) processor", out)
+    idcode = int(need(out, r"IDCODE=(0x[0-9a-f]+)").group(1), 16)
+    dev = idcode & 0xFFF
+    if dev != 0x468:
+        sys.exit(f"unexpected device id {dev:#05x} (want 0x468 = STM32G431/441)")
+    r["chip"] = m.group(1) if m else f"DBGMCU id {dev:#05x} rev {idcode >> 16:#06x}"
     r["optr"]    = int(need(out, r"OPTR=(0x[0-9a-f]+)").group(1), 16)
     f0 = int(need(out, r"FLASH0=(0x[0-9a-f]+)").group(1), 16)
     f1 = int(need(out, r"FLASH1=(0x[0-9a-f]+)").group(1), 16)
@@ -99,8 +136,17 @@ def probe():
     r["board"]    = SIGNATURES.get((r["pb8_up"], r["pb8_down"]))
     return r
 
+RTT_SETUP = 'rtt setup 0x20000000 0x8000 "SEGGER RTT"'   # same as rtt_cli.py --server
+
 def flash(path):
-    ok, out = openocd([f"program {path} 0x08000000 verify", "reset", "resume"], timeout=180)
+    # In a shared OpenOCD the RTT control block moves with every new image:
+    # stop RTT before programming and re-search it afterwards (stop, setup,
+    # start -- in that order, or OpenOCD keeps the stale address).
+    shared = openocd_telnet([], 1) is not None
+    cmds = (["rtt stop"] if shared else []) + [f"program {path} 0x08000000 verify", "reset", "resume"]
+    if shared:
+        cmds += ["sleep 200", RTT_SETUP, "rtt start", "rtt polling_interval 20"]
+    ok, out = openocd(cmds, timeout=180)
     if "** Verified OK **" not in out or "** Programming Finished **" not in out:
         print(out, file=sys.stderr)
         sys.exit("flashing failed")
@@ -129,7 +175,8 @@ def main():
 
     print("Probing board over ST-Link ...")
     r = probe()
-    print(f"  target voltage : {r['voltage']:.2f} V")
+    print(f"  target voltage : {r['voltage']:.2f} V" if r['voltage'] is not None
+          else "  target voltage : n/a (shared OpenOCD)")
     print(f"  core           : {r['chip']} (STM32G431)")
     print(f"  option bytes   : {r['optr']:#010x}  "
           f"({'boot from flash' if (r['optr'] & OPTR_nSWBOOT0) == 0 else 'boot source = BOOT0 pin'})")

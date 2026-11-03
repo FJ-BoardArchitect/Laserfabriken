@@ -58,6 +58,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/bsp/bsp_temp.c
     Core/Src/bsp/bsp_tec.c
     Core/Src/bsp/bsp_laser.c
+    Core/Src/bsp/uart_rx.c
 
     # USB CDC device (hand-modified ST template, shared by both boards)
     USB_Device/Target/usbd_conf.c

@@ -25,7 +25,7 @@
  */
 
 #define RTT_UP_SIZE    2048u   /* target -> host */
-#define RTT_DOWN_SIZE  64u    /* host -> target */
+#define RTT_DOWN_SIZE  256u   /* host -> target; a whole CLI line while the firmware is busy */
 
 void RTT_Init(void);
 void RTT_Write(const void *buf, uint16_t len);   /* drops what does not fit */

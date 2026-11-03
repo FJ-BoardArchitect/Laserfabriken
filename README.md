@@ -143,6 +143,21 @@ Drivers/, Middlewares/, USB_Device/   delade (USB_Device är handändrad ST-mall
 Koden får `BOARD_UGN` eller `BOARD_SPUD` som define, men det ska normalt inte
 behövas: kortskillnader hör hemma i `boards/<kort>/bsp_config.h`.
 
+**UART-mottagning över DMA** (`Core/Src/bsp/uart_rx.c`): portarna i
+`BSP_UART_RX_PORTS` (SPUD: USART2 "laser", LPUART1 "stage") tas emot i en cirkulär
+DMA-buffert med ett interrupt per meddelande (IDLE-linje), inte per byte. ISR:en
+lägger varje sändningsskur som en ram i en kö; huvudloopen hämtar hela ramar med
+`UartRx_Pop()`. Fel (overrun m.m.) startar om mottagningen automatiskt. Portarna
+är full duplex: sändning blockerar inte mottagningen. `uart <port> echo on` skickar
+tillbaka varje mottagen ram, `uart <port> stats` visar räknare. Kräver cirkulär
+RX-DMA-kanal och UART-interrupt i `.ioc`-filen; UGN har inga sådana portar och
+får tomma stubbar.
+
+Presets använder Ninja. Saknas `ninja` går det att bygga med Make:
+`cmake -S . -B build/SPUD-Debug-make -G "Unix Makefiles" -DBOARD=SPUD
+-DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=$PWD/cmake/gcc-arm-none-eabi.cmake`
+och sedan `--bin build/SPUD-Debug-make/laserfabriken_spud.bin` till flash-scriptet.
+
 **CubeMX:** öppna `boards/<kort>/*.ioc` och generera som vanligt. CubeMX lägger då
 `Drivers/`, `Middlewares/`, `USB_Device/`, `cmake/` m.m. bredvid `.ioc`-filen —
 de är gitignorerade och används inte; bygget tar bara `boards/<kort>/Core/`.
@@ -168,6 +183,22 @@ python3 Tools/flash-board/flash_board.py                     # Release-bygget f�
 python3 Tools/flash-board/flash_board.py --build Debug       # Debug-bygget (RTT-konsol)
 python3 Tools/flash-board/flash_board.py --board SPUD --yes  # utan frågor, med kontroll mot hårdvaran
 ```
+
+Scriptet använder en redan körande OpenOCD om det finns en (se SWD-konsolen
+nedan), annars startar det en egen. ST-Linken kan bara hållas av en OpenOCD.
+
+**SWD-konsol i flera terminaler** (Debug-bygget, `Tools/rtt-cli/rtt_cli.py`):
+
+```bash
+python3 Tools/rtt-cli/rtt_cli.py --server        # terminal 1: håller ST-Link + RTT, låt stå
+python3 Tools/rtt-cli/rtt_cli.py --watch         # terminal 2: strömmar allt kortet skriver
+python3 Tools/rtt-cli/rtt_cli.py --interactive   # terminal 3: skriv kommandon
+python3 Tools/rtt-cli/rtt_cli.py "status"        # engångskommando, ansluter till servern
+```
+
+Utan server startar varje anrop en egen OpenOCD som förut. Flash-scriptet kan
+flasha genom servern och synkar om RTT efteråt (kontrollblocket flyttar med
+varje ny binär).
 
 Identifieringen bygger på en skillnad som råkar finnas i dag. Nästa kortrevision bör
 få en egen BOARD_ID-pinne (pullup på ena kortet, pulldown på andra), särskilt om

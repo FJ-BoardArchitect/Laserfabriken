@@ -136,6 +136,13 @@
     X("5v_usb",    EN_5V_USB, 0)
 
 /* X(name, handle, connector) */
+/* UARTs received through DMA + IDLE-line interrupt by Core/Src/bsp/uart_rx.c.
+ * Same order as BSP_BRINGUP_UARTS below. Each needs a circular RX DMA channel
+ * and the UART's global interrupt enabled in the .ioc (done for both). */
+#define BSP_UART_RX_PORTS(X) \
+    X(laser, huart2) \
+    X(stage, hlpuart1)
+
 #define BSP_BRINGUP_UARTS(X) \
     X("laser", huart2,   "USART2 PA2/PA3 -> Molex M20") \
     X("stage", hlpuart1, "LPUART1 PC1/PC0 -> ZH1.5 M9")

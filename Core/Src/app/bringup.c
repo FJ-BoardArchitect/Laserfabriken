@@ -1,6 +1,7 @@
 #include "bringup.h"
 #include "bsp_config.h"
 #include "main.h"
+#include "uart_rx.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,30 +60,75 @@ static void list_pins(bringup_out_fn out, void *ctx)
 static void list_uarts(bringup_out_fn out, void *ctx)
 {
     if (!s_uarts[0].name) { out(ctx, "no bring-up UARTs on this board\r\n"); return; }
-    for (const uart_t *u = s_uarts; u->name; u++)
+    for (const uart_t *u = s_uarts; u->name; u++) {
         OUT("%-6s %lu baud  %s\r\n", u->name, (unsigned long)u->h->Init.BaudRate, u->where);
+#ifdef BSP_UART_RX_PORTS
+        const uart_rx_stats_t *st = UartRx_Stats(UartRx_Find(u->h));
+        if (st)
+            OUT("       dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu  echo=%s (%lu)\r\n",
+                st->running ? "armed" : "STOPPED", (unsigned long)st->frames, (unsigned long)st->bytes,
+                (unsigned long)st->dropped, (unsigned long)st->errors, st->echo ? "on" : "off",
+                (unsigned long)st->echoed);
+#endif
+    }
+}
+
+/* Pull up to `max` received bytes, waiting at most `ms`. With the DMA layer
+ * this returns one whole frame (one burst up to an idle gap); without it,
+ * whatever bytes trickle in during the wait. */
+static size_t rx_take(const uart_t *u, uint8_t *buf, size_t max, uint32_t ms)
+{
+#ifdef BSP_UART_RX_PORTS
+    int port = UartRx_Find(u->h);
+    uint32_t t0 = HAL_GetTick();
+    do {
+        size_t n = UartRx_Pop(port, buf, max);
+        if (n) return n;
+        UartRx_Process();   /* echo and error restart must not wait for this command to finish */
+    } while (HAL_GetTick() - t0 < ms);
+    return 0;
+#else
+    size_t n = 0;
+    uint32_t t0 = HAL_GetTick();
+    while (n < max && HAL_GetTick() - t0 < ms)
+        if (HAL_UART_Receive(u->h, &buf[n], 1, 5) == HAL_OK) n++;
+    return n;
+#endif
+}
+
+static void rx_flush(const uart_t *u)
+{
+#ifdef BSP_UART_RX_PORTS
+    UartRx_Flush(UartRx_Find(u->h));
+#else
+    uint8_t b;
+    __HAL_UART_CLEAR_OREFLAG(u->h);
+    while (HAL_UART_Receive(u->h, &b, 1, 2) == HAL_OK) {}
+#endif
 }
 
 /* Receive for up to `ms`, printing bytes as hex and as printable text. */
 static void dump_rx(const uart_t *u, uint32_t ms, bringup_out_fn out, void *ctx)
 {
-    uint8_t buf[16];
+    uint8_t buf[256];                 /* one whole DMA frame */
     uint32_t t0 = HAL_GetTick();
     size_t total = 0;
-    __HAL_UART_CLEAR_OREFLAG(u->h);
     while (HAL_GetTick() - t0 < ms) {
-        size_t n = 0;
-        while (n < sizeof buf && HAL_UART_Receive(u->h, &buf[n], 1, 5) == HAL_OK) n++;
+        size_t n = rx_take(u, buf, sizeof buf, 20);
         if (n == 0) continue;
         total += n;
-        char hex[3 * 16 + 1], asc[16 + 1];
-        size_t hp = 0;
-        for (size_t i = 0; i < n; i++) {
-            hp += (size_t)snprintf(&hex[hp], sizeof hex - hp, "%02X ", buf[i]);
-            asc[i] = isprint(buf[i]) ? (char)buf[i] : '.';
+        OUT("  rx %2u:", (unsigned)n);
+        for (size_t i = 0; i < n; i += 16) {
+            size_t k = (n - i < 16) ? n - i : 16;
+            char hex[3 * 16 + 1], asc[16 + 1];
+            size_t hp = 0;
+            for (size_t j = 0; j < k; j++) {
+                hp += (size_t)snprintf(&hex[hp], sizeof hex - hp, "%02X ", buf[i + j]);
+                asc[j] = isprint(buf[i + j]) ? (char)buf[i + j] : '.';
+            }
+            asc[k] = '\0';
+            OUT("%s %-48s |%s|\r\n", i ? "        " : "", hex, asc);
         }
-        asc[n] = '\0';
-        OUT("  rx %2u: %s |%s|\r\n", (unsigned)n, hex, asc);
     }
     if (total == 0) out(ctx, "  rx: nothing\r\n");
 }
@@ -109,10 +155,16 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         char *v = strtok(0, " ");
         long baud = v ? strtol(v, 0, 10) : 0;
         if (baud < 300 || baud > 2000000) { out(ctx, "ERR: baud 300..2000000\r\n"); return true; }
+#ifdef BSP_UART_RX_PORTS
+        UartRx_Suspend(UartRx_Find(u->h));
+#endif
         HAL_UART_DeInit(u->h);
         u->h->Init.BaudRate = (uint32_t)baud;
         if (HAL_UART_Init(u->h) != HAL_OK) out(ctx, "ERR: HAL_UART_Init failed\r\n");
         else OUT("OK %s = %ld baud\r\n", u->name, baud);
+#ifdef BSP_UART_RX_PORTS
+        UartRx_Resume(UartRx_Find(u->h));
+#endif
         return true;
     }
     if (strcmp(sub, "send") == 0) {
@@ -142,16 +194,38 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
     }
     if (strcmp(sub, "loop") == 0) {
         static const uint8_t pat[] = { 0x55, 0xAA, 'L', 'F', 0x00, 0xFF, '\r', '\n' };
-        uint8_t back[sizeof pat]; size_t n = 0;
-        __HAL_UART_CLEAR_OREFLAG(u->h);
-        while (HAL_UART_Receive(u->h, back, 1, 2) == HAL_OK) {}   /* flush stale bytes */
+        uint8_t back[sizeof pat]; size_t n;
+        rx_flush(u);
         HAL_UART_Transmit(u->h, (uint8_t *)pat, sizeof pat, 100);
-        while (n < sizeof pat && HAL_UART_Receive(u->h, &back[n], 1, 50) == HAL_OK) n++;
+        n = rx_take(u, back, sizeof back, 100);
         if (n == sizeof pat && memcmp(pat, back, n) == 0) OUT("OK loopback on %s: %u/%u bytes back\r\n", u->name, (unsigned)n, (unsigned)sizeof pat);
         else OUT("FAIL loopback on %s: %u/%u bytes back (TX-RX jumper in place?)\r\n", u->name, (unsigned)n, (unsigned)sizeof pat);
         return true;
     }
-    OUT("ERR: uart %s: unknown subcommand '%s' (baud|send|hex|listen|loop)\r\n", u->name, sub);
+#ifdef BSP_UART_RX_PORTS
+    if (strcmp(sub, "echo") == 0) {
+        char *v = strtok(0, " ");
+        if (!v || (strcmp(v, "on") && strcmp(v, "off"))) { out(ctx, "ERR: uart <name> echo on|off\r\n"); return true; }
+        UartRx_SetEcho(UartRx_Find(u->h), v[1] == 'n');
+        OUT("OK %s echo %s (received frames are sent straight back)\r\n", u->name, v);
+        return true;
+    }
+    if (strcmp(sub, "stats") == 0) {
+        const uart_rx_stats_t *st = UartRx_Stats(UartRx_Find(u->h));
+        OUT("%s: dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu pending=%u echo=%s echoed=%lu\r\n",
+            u->name, st->running ? "armed" : "STOPPED", (unsigned long)st->frames, (unsigned long)st->bytes,
+            (unsigned long)st->dropped, (unsigned long)st->errors, (unsigned)UartRx_Pending(UartRx_Find(u->h)),
+            st->echo ? "on" : "off", (unsigned long)st->echoed);
+        OUT("       last event: size=%u type=%s  dma cndtr=%u  uart isr=0x%08lx\r\n", st->last_size,
+            st->last_type == 0 ? "TC" : st->last_type == 1 ? "HT" : "IDLE", st->dma_cndtr,
+            (unsigned long)u->h->Instance->ISR);
+        OUT("       events=%lu last_tick=%lu  in-event: xfersize=%u xfercount=%u cndtr=%u cr3=0x%08lx\r\n",
+            (unsigned long)st->events, (unsigned long)st->last_tick, st->ev_xfersize, st->ev_xfercount,
+            st->ev_cndtr, (unsigned long)st->ev_cr3);
+        return true;
+    }
+#endif
+    OUT("ERR: uart %s: unknown subcommand '%s' (baud|send|hex|listen|loop|echo|stats)\r\n", u->name, sub);
     return true;
 }
 
@@ -189,6 +263,7 @@ bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 const char *Bringup_HelpText(void)
 {
     return "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
-           "  uart [<name> baud <n> | send <text> | hex <bytes> | listen <s> | loop]\r\n"
+           "  uart [<name> baud <n> | send <text> | hex <bytes> | listen <s> | loop |\r\n"
+           "        echo on|off | stats]\r\n"
            "                        — bring-up: raw access to the board's extra UARTs\r\n";
 }

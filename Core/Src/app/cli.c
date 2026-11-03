@@ -20,7 +20,7 @@
 
 extern USBD_HandleTypeDef hUsbDeviceFS;   /* usb_device.c -- for the configured check in usb_send() */
 
-#define CLI_BUF_LEN  80
+#define CLI_BUF_LEN  128
 
 /* ── Channels ────────────────────────────────────────────────────────────────
  * Every byte source the CLI listens to is a channel: a byte pop function, a

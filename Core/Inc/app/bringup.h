@@ -15,6 +15,11 @@
  *   uart <name> hex <aa bb ..>  send raw bytes, print what comes back (300 ms)
  *   uart <name> listen <s>      print whatever arrives for <s> seconds (max 10)
  *   uart <name> loop            TX->RX jumper test: send a pattern, expect it back
+ *   uart <name> echo on|off     send every received frame straight back (DMA boards)
+ *   uart <name> stats           DMA reception counters (DMA boards)
+ *
+ * On boards with BSP_UART_RX_PORTS reception goes through uart_rx.c (DMA +
+ * idle-line interrupt); "listen" then prints one line per received frame.
  *
  * Replies are plain text; in the display's machine mode these commands are
  * never issued, so no protocol line format is affected.

@@ -34,6 +34,7 @@
 #include "params.h"
 #include "cli.h"
 #include "usbc_port.h"
+#include "uart_rx.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -132,6 +133,7 @@ int main(void)
       }
   }
 
+  UartRx_Init(); /* DMA + IDLE reception on the laser and stage UARTs */
   USBC_Init();   /* 5V on USB-C VBUS only for a detected display */
   TEC_Control_Init();
   Laser_Control_Init();
@@ -152,6 +154,7 @@ int main(void)
     }
     Params_Process();
     USBC_Process();
+    UartRx_Process();
     CLI_Process();
     /* USER CODE END WHILE */
 

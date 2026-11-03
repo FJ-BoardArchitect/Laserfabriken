@@ -301,11 +301,21 @@ displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README
 | Värde satt via CLI (`set laser.power 55`) → displayen följer | ✅ |
 | Rattvridning på displayen → SPUD:s värden följer (55→59 %, 1554,39→1545,00 nm) | ✅ |
 | Knapp på displayen → `laser on` når SPUD | ✅ |
-| USART2 (laser) / LPUART1 (stage) loopback | ⏳ bygel TX–RX i M20 resp. M9 saknas än |
+| USART2 (laser) / LPUART1 (stage) korskopplade, M20.3→M9.3 och M9.2→M20.2 (2026-11-03) | ✅ 18, 87 och 8 byte (binärt) fram i båda riktningarna som hela ramar, echo tillbaka, 0 fel |
+| UART-mottagning via DMA + IDLE-interrupt (`uart_rx.c`), full duplex | ✅ |
 
 **Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
-`pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud`. Debug-bygget
-speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
+`pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud|echo on|off|stats`.
+Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
+
+**Lärdomar från UART-testet:** (1) HAL:en rapporterar en IDLE-händelse med hela
+buffertstorleken när DMA-räknaren är orörd, och hårdvaran höjer en sådan direkt
+efter att mottagaren slås på — `uart_rx.c` jämför positioner modulo bufferten så
+den blir "inget nytt". (2) RX-pinnarna PA3/PC0 har intern pull-up; utan den ger en
+oansluten kontakt ett framing-fel vid uppstart. (3) Byglar TX–TX/RX–RX ger exakt
+noll byte; mät med `mww/mdw` via OpenOCD (en pinne som utgång, läs de andra) innan
+du letar fel i mjukvaran. (4) RTT:s inbuffert var 64 byte och tappade tecken när
+firmwaren var upptagen i ett kommando; nu 256, och `rtt_cli.py` väntar på prompten.
 
 **Notering om displayen:** den första displaymodulen gav inga encoderpulser alls
 (`# knob ev=0 a=1 b=1` konstant, drivrutinen OK) — trasig ratt i hårdvaran. Bytt
