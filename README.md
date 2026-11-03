@@ -148,8 +148,9 @@ behövas: kortskillnader hör hemma i `boards/<kort>/bsp_config.h`.
 DMA-buffert med ett interrupt per meddelande (IDLE-linje), inte per byte. ISR:en
 lägger varje sändningsskur som en ram i en kö; huvudloopen hämtar hela ramar med
 `UartRx_Pop()`. Fel (overrun m.m.) startar om mottagningen automatiskt. Portarna
-är full duplex: sändning blockerar inte mottagningen. `uart <port> echo on` skickar
-tillbaka varje mottagen ram, `uart <port> stats` visar räknare. Kräver cirkulär
+är full duplex: sändning blockerar inte mottagningen. Varje mottagen ram skrivs
+direkt på terminalen som `stage rx 3: 01 02 03` (`uart monitor off` tystar),
+`uart <port> stats` visar räknare. Kräver cirkulär
 RX-DMA-kanal och UART-interrupt i `.ioc`-filen; UGN har inga sådana portar och
 får tomma stubbar.
 

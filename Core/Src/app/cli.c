@@ -212,6 +212,17 @@ static void cli_sendf(cli_chan_t *ch, const char *fmt, ...)
 /* bringup.c output adapter */
 static void cli_bringup_out(void *ctx, const char *text) { cli_send((cli_chan_t *)ctx, text); }
 
+/* Unsolicited bring-up output (received UART frames): every terminal, never
+ * the display's machine-mode channel. */
+static void cli_terminal_out(void *ctx, const char *text)
+{
+    (void)ctx;
+#ifdef CLI_RTT
+    cli_send(&s_rtt, text);
+#endif
+    if (!s_usb.machine) cli_send(&s_usb, text);
+}
+
 
 /* Binary-safe counterpart to cli_send(ch, )/cli_sendf(ch, ) -- both of those call
  * strlen() internally, which would silently truncate at the first 0x00
@@ -1259,6 +1270,8 @@ void CLI_Process(void)
     }
 
     bridge_seq_tick();
+    if (Bringup_Monitor(cli_terminal_out, NULL) > 0)
+        cli_terminal_out(NULL, "> ");     /* fresh prompt after unsolicited lines */
 
     if (s_bridge_active) {
         /* Raw byte relay between the PC (USB-CDC) and the ESP32's ROM

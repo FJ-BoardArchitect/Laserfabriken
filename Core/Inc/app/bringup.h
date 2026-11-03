@@ -13,29 +13,34 @@
  *   uart <name> baud <n>        re-init the UART at a new baud rate
  *   uart <name> send <text>     send text + CRLF, print what comes back (300 ms)
  *   uart <name> hex <aa bb ..>  send raw bytes, print what comes back (300 ms)
- *   uart <name> listen <s>      print whatever arrives for <s> seconds (max 10)
  *   uart <name> loop            TX->RX jumper test: send a pattern, expect it back
- *   uart <name> echo on|off     send every received frame straight back (DMA boards)
  *   uart <name> stats           DMA reception counters (DMA boards)
+ *   uart monitor on|off         print received frames as they arrive (default on)
  *   uart duplex [<text>]        every table UART transmits "<text>-from-<name>" at
  *                               the same instant; shows tx and rx per port
  *
  * On boards with BSP_UART_RX_PORTS reception goes through uart_rx.c (DMA +
  * idle-line interrupt); "listen" then prints one line per received frame.
  *
- * Received frames print as   stage rx 3: 01 02 03   -- the receiving port,
- * byte count, then the bytes in hex. Nothing is printed for what was sent.
- * send/hex/duplex show what arrived on every port afterwards.
+ * Every frame a table UART receives is printed as soon as it arrives, on
+ * the terminal channels only (never to a display in machine mode), as
+ *   stage rx 3: 01 02 03   -- receiving port, byte count, bytes in hex.
+ * Nothing is printed for what was sent. Bringup_Monitor() does this and is
+ * called from CLI_Process().
  *
  * Replies are plain text; in the display's machine mode these commands are
  * never issued, so no protocol line format is affected.
  */
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef void (*bringup_out_fn)(void *ctx, const char *text);
 
 /* Returns true when the line was a bring-up command (handled, reply sent). */
 bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx);
+
+/* Print frames received since the last call (see above); returns how many. */
+size_t Bringup_Monitor(bringup_out_fn out, void *ctx);
 
 /* Help text lines, for the CLI 'help' output. */
 const char *Bringup_HelpText(void);

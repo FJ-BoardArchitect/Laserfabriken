@@ -65,10 +65,9 @@ static void list_uarts(bringup_out_fn out, void *ctx)
 #ifdef BSP_UART_RX_PORTS
         const uart_rx_stats_t *st = UartRx_Stats(UartRx_Find(u->h));
         if (st)
-            OUT("       dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu  echo=%s (%lu)\r\n",
+            OUT("       dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu\r\n",
                 st->running ? "armed" : "STOPPED", (unsigned long)st->frames, (unsigned long)st->bytes,
-                (unsigned long)st->dropped, (unsigned long)st->errors, st->echo ? "on" : "off",
-                (unsigned long)st->echoed);
+                (unsigned long)st->dropped, (unsigned long)st->errors);
 #endif
     }
 }
@@ -84,7 +83,7 @@ static size_t rx_take(const uart_t *u, uint8_t *buf, size_t max, uint32_t ms)
     do {
         size_t n = UartRx_Pop(port, buf, max);
         if (n) return n;
-        UartRx_Process();   /* echo and error restart must not wait for this command to finish */
+        UartRx_Process();   /* error restart must not wait for this command to finish */
     } while (HAL_GetTick() - t0 < ms);
     return 0;
 #else
@@ -120,31 +119,28 @@ static void print_rx(const uart_t *u, const uint8_t *d, size_t n, bringup_out_fn
     out(ctx, "\r\n");
 }
 
-/* Print every frame that arrives on `u` within `ms`; returns frames seen. */
-static size_t dump_rx(const uart_t *u, uint32_t ms, bringup_out_fn out, void *ctx)
-{
-    uint8_t buf[256];                 /* one whole DMA frame */
-    uint32_t t0 = HAL_GetTick();
-    size_t frames = 0;
-    while (HAL_GetTick() - t0 < ms) {
-        size_t n = rx_take(u, buf, sizeof buf, 20);
-        if (n == 0) continue;
-        frames++;
-        print_rx(u, buf, n, out, ctx);
-    }
-    return frames;
-}
+static bool s_monitor = true;
 
-/* Print what arrives on every table port within `ms` (a message sent on one
- * port normally shows up on another one). */
-static void dump_rx_all(uint32_t ms, bringup_out_fn out, void *ctx)
+/* Called from the main loop (CLI_Process): print every frame that has
+ * arrived on any table UART since last time, as "<port> rx <n>: <hex>". */
+size_t Bringup_Monitor(bringup_out_fn out, void *ctx)
 {
     size_t frames = 0;
-    uint32_t t0 = HAL_GetTick();
-    while (HAL_GetTick() - t0 < ms)
-        for (const uart_t *u = s_uarts; u->name; u++)
-            frames += dump_rx(u, 10, out, ctx);
-    if (frames == 0) out(ctx, "rx: nothing\r\n");
+#ifdef BSP_UART_RX_PORTS
+    if (!s_monitor) return 0;
+    uint8_t buf[256];                 /* one whole DMA frame */
+    for (const uart_t *u = s_uarts; u->name; u++) {
+        int port = UartRx_Find(u->h);
+        size_t n;
+        while ((n = UartRx_Pop(port, buf, sizeof buf)) > 0) {
+            print_rx(u, buf, n, out, ctx);
+            frames++;
+        }
+    }
+#else
+    (void)out; (void)ctx;
+#endif
+    return frames;
 }
 
 static void uart_send(const uart_t *u, const uint8_t *d, size_t n, bringup_out_fn out, void *ctx)
@@ -181,13 +177,18 @@ static void cmd_duplex(const char *text, bringup_out_fn out, void *ctx)
         UartRx_Process();
 #endif
     }
-    dump_rx_all(300, out, ctx);
 }
 
 static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
 {
     char *name = strtok(args, " ");
     if (!name) { list_uarts(out, ctx); return true; }
+    if (strcmp(name, "monitor") == 0) {
+        char *v = strtok(0, " ");
+        if (v && (strcmp(v, "on") == 0 || strcmp(v, "off") == 0)) s_monitor = (v[1] == 'n');
+        OUT("monitor %s: received frames print as \"<port> rx <n>: <hex>\"\r\n", s_monitor ? "on" : "off");
+        return true;
+    }
     if (strcmp(name, "duplex") == 0) {
         char *text = strtok(0, "");
         cmd_duplex(text && *text ? text : "hello", out, ctx);
@@ -219,7 +220,6 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         char msg[96];
         snprintf(msg, sizeof msg, "%s\r\n", text ? text : "");
         uart_send(u, (uint8_t *)msg, strlen(msg), out, ctx);
-        dump_rx_all(300, out, ctx);
         return true;
     }
     if (strcmp(sub, "hex") == 0) {
@@ -227,16 +227,6 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         while ((tok = strtok(0, " ")) && n < sizeof d) d[n++] = (uint8_t)strtol(tok, 0, 16);
         if (n == 0) { out(ctx, "ERR: give bytes, e.g. 'uart laser hex 01 02 FF'\r\n"); return true; }
         uart_send(u, d, n, out, ctx);
-        dump_rx_all(300, out, ctx);
-        return true;
-    }
-    if (strcmp(sub, "listen") == 0) {
-        char *v = strtok(0, " ");
-        long s = v ? strtol(v, 0, 10) : 2;
-        if (s < 1) s = 1;
-        if (s > 10) s = 10;
-        OUT("listening on %s for %ld s ...\r\n", u->name, s);
-        if (dump_rx(u, (uint32_t)s * 1000u, out, ctx) == 0) OUT("%s rx: nothing\r\n", u->name);
         return true;
     }
     if (strcmp(sub, "loop") == 0) {
@@ -250,19 +240,11 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         return true;
     }
 #ifdef BSP_UART_RX_PORTS
-    if (strcmp(sub, "echo") == 0) {
-        char *v = strtok(0, " ");
-        if (!v || (strcmp(v, "on") && strcmp(v, "off"))) { out(ctx, "ERR: uart <name> echo on|off\r\n"); return true; }
-        UartRx_SetEcho(UartRx_Find(u->h), v[1] == 'n');
-        OUT("OK %s echo %s (received frames are sent straight back)\r\n", u->name, v);
-        return true;
-    }
     if (strcmp(sub, "stats") == 0) {
         const uart_rx_stats_t *st = UartRx_Stats(UartRx_Find(u->h));
-        OUT("%s: dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu pending=%u echo=%s echoed=%lu\r\n",
+        OUT("%s: dma rx %s  frames=%lu bytes=%lu dropped=%lu errors=%lu pending=%u\r\n",
             u->name, st->running ? "armed" : "STOPPED", (unsigned long)st->frames, (unsigned long)st->bytes,
-            (unsigned long)st->dropped, (unsigned long)st->errors, (unsigned)UartRx_Pending(UartRx_Find(u->h)),
-            st->echo ? "on" : "off", (unsigned long)st->echoed);
+            (unsigned long)st->dropped, (unsigned long)st->errors, (unsigned)UartRx_Pending(UartRx_Find(u->h)));
         OUT("       last event: size=%u type=%s  dma cndtr=%u  uart isr=0x%08lx\r\n", st->last_size,
             st->last_type == 0 ? "TC" : st->last_type == 1 ? "HT" : "IDLE", st->dma_cndtr,
             (unsigned long)u->h->Instance->ISR);
@@ -272,7 +254,7 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         return true;
     }
 #endif
-    OUT("ERR: uart %s: unknown subcommand '%s' (baud|send|hex|listen|loop|echo|stats)\r\n", u->name, sub);
+    OUT("ERR: uart %s: unknown subcommand '%s' (baud|send|hex|loop|stats)\r\n", u->name, sub);
     return true;
 }
 
@@ -310,7 +292,8 @@ bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 const char *Bringup_HelpText(void)
 {
     return "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
-           "  uart [<name> baud <n> | send <text> | hex <bytes> | listen <s> | loop |\r\n"
-           "        echo on|off | stats]   uart duplex [<text>]  — all ports TX at once\r\n"
+           "  uart [<name> baud <n> | send <text> | hex <bytes> | loop | stats]\r\n"
+           "  uart duplex [<text>]  — all ports TX at once;  uart monitor on|off\r\n"
+           "                        — received frames print as \"<port> rx <n>: <hex>\"\r\n"
            "                        — bring-up: raw access to the board's extra UARTs\r\n";
 }

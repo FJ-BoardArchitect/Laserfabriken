@@ -132,15 +132,6 @@ void UartRx_Process(void)
     for (int i = 0; i < UART_RX_PORT_COUNT; i++) {
         port_t *p = &s_port[i];
         if (p->need_restart && p->h->RxState == HAL_UART_STATE_READY) arm(p);
-        if (p->st.echo) {
-            uint8_t buf[DMA_BUF_SIZE];
-            size_t n;
-            while ((n = UartRx_Pop(i, buf, sizeof buf)) > 0) {
-                /* 9600 baud ~ 1 ms per byte; allow for that plus margin. */
-                HAL_UART_Transmit(p->h, buf, (uint16_t)n, (uint32_t)n * 2u + 20u);
-                p->st.echoed++;
-            }
-        }
     }
 }
 
@@ -178,11 +169,6 @@ void UartRx_Flush(int port)
 {
     uint8_t scratch[8];
     while (UartRx_Pop(port, scratch, sizeof scratch) > 0) {}
-}
-
-void UartRx_SetEcho(int port, bool on)
-{
-    if (port >= 0 && port < UART_RX_PORT_COUNT) s_port[port].st.echo = on;
 }
 
 const uart_rx_stats_t *UartRx_Stats(int port)

@@ -8,8 +8,6 @@
  * idle for one character time after the last byte (HAL "ReceiveToIdle"),
  * so one interrupt per message instead of one per byte. The ISR copies
  * the new bytes into a frame queue; the main loop pops whole frames with
- * UartRx_Pop(). An "echo" mode transmits every received frame straight
- * back out on the same port (useful for bring-up with a terminal).
  *
  * Boards without BSP_UART_RX_PORTS get empty inline stubs, so main.c and
  * bringup.c can call this unconditionally.
@@ -24,7 +22,6 @@ typedef struct {
     uint32_t bytes;     /* bytes delivered to the frame queue                */
     uint32_t dropped;   /* bytes lost because the frame queue was full       */
     uint32_t errors;    /* ORE/FE/NE/PE seen -> reception was restarted      */
-    uint32_t echoed;    /* frames sent back in echo mode                     */
     uint16_t last_size; /* Size argument of the last RxEvent              */
     uint8_t  last_type; /* HAL_UART_RXEVENT_TC=0 HT=1 IDLE=2 of last event    */
     uint16_t dma_cndtr; /* DMA remaining-count register when stats were read  */
@@ -32,7 +29,6 @@ typedef struct {
     uint32_t last_tick; /* HAL_GetTick() at the last event                     */
     uint16_t ev_xfersize, ev_xfercount, ev_cndtr; /* HAL state inside the event */
     uint32_t ev_cr3;
-    bool     echo;
     bool     running;   /* DMA reception armed                               */
 } uart_rx_stats_t;
 
@@ -46,13 +42,12 @@ enum {
 };
 
 void   UartRx_Init(void);                 /* arm DMA reception on every port   */
-void   UartRx_Process(void);              /* main loop: echo, restart on error */
+void   UartRx_Process(void);              /* main loop: restart after an error */
 int    UartRx_Find(const void *huart);    /* port index for a UART handle, -1  */
 size_t UartRx_Pop(int port, uint8_t *dst, size_t max);  /* one frame, 0 = none;
                                              a frame longer than max is truncated */
 size_t UartRx_Pending(int port);          /* frames waiting                    */
 void   UartRx_Flush(int port);            /* discard queued frames             */
-void   UartRx_SetEcho(int port, bool on);
 const uart_rx_stats_t *UartRx_Stats(int port);
 void   UartRx_Suspend(int port);          /* stop DMA before HAL_UART_DeInit   */
 void   UartRx_Resume(int port);           /* re-arm after HAL_UART_Init        */
