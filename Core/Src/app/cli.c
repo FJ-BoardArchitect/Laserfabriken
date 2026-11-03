@@ -571,6 +571,16 @@ static void process_line(cli_chan_t *ch, char *line)
 
         if (g_tec_pg_fault)
             cli_send(ch, "  TEC buck: FAULT — power-good low\r\n");
+#if BSP_TEC_CURRENT_MODE
+        {
+            float tv, ta;
+            BSP_TEC_Measure(&tv, &ta);
+            cli_sendf(ch, "  TEC drive: cmd=%.3f A (Imax %.2f A)  measured V=%.2f V  I=%.3f A  EN=%d  PG=%d\r\n",
+                      (double)BSP_TEC_CommandedCurrent(), (double)BSP_TEC_IMAX_A, (double)tv, (double)ta,
+                      HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET,
+                      BSP_TEC_PowerGood());
+        }
+#endif
 
         cli_sendf(ch, "NTC: Vref=%.3f V  Rseries=%.1f ohm  A=%.6e  B=%.6e  C=%.6e\r\n",
                   (double)g_ntc_vref_v, (double)g_ntc_rseries_ohm,

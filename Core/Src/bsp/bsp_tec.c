@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <assert.h>
 
+#ifndef BSP_TEC_CURRENT_MODE
+#define BSP_TEC_CURRENT_MODE 0
+#endif
+
 /*
  * TEC control — UGN board.
  *
@@ -31,6 +35,78 @@
 //     HAL_DAC_Start(BSP_DAC, dac_ch);
 // }
 
+
+/* ── Current-mode drive (SPUD: M2 TPS563252 wired as a current source) ──────
+ * Iout = BSP_TEC_IOUT_AT_0V_A + BSP_TEC_IOUT_PER_V_A * VDAC, so more DAC
+ * voltage means LESS current and VDAC >= IOUT_AT_0V/|PER_V| means none.
+ * |PID output| 0..1 maps linearly onto 0..BSP_TEC_IMAX_A. */
+#if BSP_TEC_CURRENT_MODE
+#include "adc.h"
+
+static float s_cmd_current_a;
+
+static float value_to_amps(float v)
+{
+    if (v < 0.0f) v = -v;
+    if (v > 1.0f) v = 1.0f;
+    return v * BSP_TEC_IMAX_A;
+}
+
+static uint16_t amps_to_dac_code(float amps)
+{
+    float vdac = (amps - BSP_TEC_IOUT_AT_0V_A) / BSP_TEC_IOUT_PER_V_A;
+    if (vdac < 0.0f) vdac = 0.0f;
+    if (vdac > BSP_DAC_VREF_V) vdac = BSP_DAC_VREF_V;
+    uint32_t code = (uint32_t)(vdac / BSP_DAC_VREF_V * 4095.0f + 0.5f);
+    return (uint16_t)(code > 4095u ? 4095u : code);
+}
+
+static float adc_read_volts(uint32_t channel)
+{
+    ADC_HandleTypeDef *h = BSP_TEC_MEAS_ADC;
+    static bool calibrated;
+    if (!calibrated) {
+        if (HAL_ADCEx_Calibration_Start(h, ADC_SINGLE_ENDED) != HAL_OK) return -1.0f;
+        calibrated = true;
+    }
+    ADC_ChannelConfTypeDef c = {0};
+    c.Channel      = channel;
+    c.Rank         = ADC_REGULAR_RANK_1;
+    c.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;   /* ~12 kohm divider source */
+    c.SingleDiff   = ADC_SINGLE_ENDED;
+    c.OffsetNumber = ADC_OFFSET_NONE;
+    if (HAL_ADC_ConfigChannel(h, &c) != HAL_OK) return -1.0f;
+    if (HAL_ADC_Start(h) != HAL_OK) return -1.0f;
+    if (HAL_ADC_PollForConversion(h, 10) != HAL_OK) { HAL_ADC_Stop(h); return -1.0f; }
+    uint32_t code = HAL_ADC_GetValue(h);
+    HAL_ADC_Stop(h);
+    return (float)code / 4095.0f * BSP_ADC_VREF_V;
+}
+#endif
+
+float BSP_TEC_CommandedCurrent(void)
+{
+#if BSP_TEC_CURRENT_MODE
+    return s_cmd_current_a;
+#else
+    return 0.0f;
+#endif
+}
+
+bool BSP_TEC_Measure(float *volts, float *amps)
+{
+#if BSP_TEC_CURRENT_MODE
+    float v = adc_read_volts(BSP_TEC_VMEAS_CH);
+    float i = adc_read_volts(BSP_TEC_IMEAS_CH);
+    if (v < 0.0f || i < 0.0f) { *volts = -1.0f; *amps = -1.0f; return false; }
+    *volts = v / BSP_TEC_VMEAS_GAIN;
+    *amps  = i / BSP_TEC_IMEAS_V_PER_A;
+    return true;
+#else
+    *volts = -1.0f; *amps = -1.0f;
+    return false;
+#endif
+}
 
 /* ── Static variables ────────────────────────────────────────────────────────── */
 
@@ -104,18 +180,28 @@ void BSP_TEC_SetOutput(TecChannel_t ch)
 
     // Set DAC output depending on state
     if (polarity_state == POLARITY_INIT) {
+        /* Max VDAC = inert on both boards: UGN's buck locks out, SPUD's
+         * current source is asked for a negative current, i.e. none. */
         BSP_TEC_SetRawDAC(4095u);
+#if BSP_TEC_CURRENT_MODE
+        s_cmd_current_a = 0.0f;
+#endif
 
         /* Disable buck converter */
         HAL_GPIO_WritePin(TEC_EN_GPIO_Port, TEC_EN_Pin, GPIO_PIN_RESET);
         polarity_state = POLARITY_RUN;
     } else {
+#if BSP_TEC_CURRENT_MODE
+        s_cmd_current_a = value_to_amps(value);
+        dac_code = amps_to_dac_code(s_cmd_current_a);
+#else
         if (value < 0.0f) {
             value = -value; // Make value positive for DAC calculation
         }
         if (value > 0.5f) value = 0.5f;
 
         dac_code = 4095u - (uint16_t)(value * 4095.0f);
+#endif
         BSP_TEC_SetRawDAC(dac_code);
     }
     _polarity_state_ch[ch] = polarity_state;
@@ -123,6 +209,14 @@ void BSP_TEC_SetOutput(TecChannel_t ch)
 
 float BSP_TEC_EstimateVoltage(float normalized_output)
 {
+#if BSP_TEC_CURRENT_MODE
+    /* SPUD senses the real output: report the measured voltage instead of a
+     * model. -1 if the ADC read fails. */
+    (void)normalized_output;
+    float v, i;
+    BSP_TEC_Measure(&v, &i);
+    return v;
+#else
     /* Reproduce BSP_TEC_SetOutput()'s own dac_code derivation exactly
      * (lines above: clamp to [0,0.5], invert), so this always reflects
      * what's actually being commanded, not a separate approximation of it. */
@@ -150,6 +244,7 @@ float BSP_TEC_EstimateVoltage(float normalized_output)
     if (vout < 0.0f) vout = 0.0f;
 
     return vout;
+#endif
 }
 
 // void BSP_TEC_Disable(TecChannel_t ch)

@@ -314,6 +314,14 @@ Inget skrivs för det som sändes. Raderna går bara till terminaler, aldrig til
 (USART2 PA2/PA3) — `.ioc`-etiketterna var spegelvända.
 Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
 
+**TEC i strömläge (`bsp_tec.c`, `BSP_TEC_CURRENT_MODE`):** |PID-utgång| 0..1 → 0..`BSP_TEC_IMAX_A`
+(1,0 A tills elementets märkström är känd) → VDAC = 2,52 V − I → DAC-kod mot 2,9 V-referens
+(VREF+ matas av VREFBUF, inte VDDA — `BSP_DAC_VREF_V` rättad från 3,3). Inert läge = DAC 4095
+(negativ strömbegäran = ingen). Vmeas/Imeas läses pollat på ADC2 (247 cykler samplingstid,
+kalibrering vid första läsning); `crystal.tec_voltage` till displayen är nu uppmätt spänning.
+CLI: `tec` visar EN/PG/polaritet/DAC/modell/uppmätt, `status` har raden "TEC drive".
+Polaritetspinnens riktning (0 = cool antas) är **inte** verifierad på SPUD än.
+
 **ADS1220 (SPI3):** SPUD:s `.ioc` saknade `SPI3.CLKPhase`, så CubeMX genererade
 SPI-läge 0 (första flanken). ADS1220 kräver läge 1 (andra flanken), som UGN har.
 Symtomet var registervärden förskjutna exakt en bit vid återläsning (skrivet 0x81
@@ -335,5 +343,5 @@ firmwaren var upptagen i ett kommando; nu 256, och `rtt_cli.py` väntar på prom
 modul fungerar. `KNOB_DEBUG` i sketchen ger den diagnostiken över länken.
 
 **Kvar på SPUD:** laserprotokollet på LPUART1 (ZH M9), vad STAGE (USART2 på Molex M20 + P1–P4) är,
-AUX-skenans roll, strömreglerings-modell för TEC:n med ADC2-mätningarna, NTC-
-seriemotstånd på SPUD, samt punkt 4–5 i §3.2.
+AUX-skenans roll, första TEC-körningen (verifiera polaritet, strömmodellen mot uppmätt I,
+sätt `BSP_TEC_IMAX_A` efter elementet), samt punkt 4–5 i §3.2.

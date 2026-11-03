@@ -1,6 +1,7 @@
 #ifndef BSP_CONFIG_H
 #define BSP_CONFIG_H
 
+#include "adc.h"        /* hadc2: TEC Vmeas/Imeas */
 #include "usart.h"      /* huart2 (laser connector), hlpuart1 (3-pin UART connector) */
 #include "spi.h"
 #include "dac.h"
@@ -95,13 +96,22 @@
 #define BSP_TEC_IOUT_PER_V_A    -1.0f
 #define BSP_TEC_VMEAS_GAIN       (16.0f / 63.0f)
 #define BSP_TEC_IMEAS_V_PER_A    (33.0f / 43.0f)
+/* Largest current the PID may command (|output| = 1.0). Set from the TEC
+ * element's rating; 1.0 A is a cautious bench default. The converter itself
+ * tops out at BSP_TEC_IOUT_AT_0V_A. */
+#define BSP_TEC_IMAX_A           1.0f
+#define BSP_TEC_MEAS_ADC         (&hadc2)
+#define BSP_TEC_VMEAS_CH         ADC_CHANNEL_3   /* PA6 */
+#define BSP_TEC_IMEAS_CH         ADC_CHANNEL_4   /* PA7 */
 #define BSP_TEC_FB_R14_OHM   150000.0f  /* UGN model, not valid on SPUD */
 #define BSP_TEC_FB_R15_OHM   33000.0f
 #define BSP_TEC_FB_R16_OHM   12000.0f
 #define BSP_TEC_FB_VREF_V    0.6f
 
-/* STM32 DAC reference = VDDA = 3.3 V rail (M7 TPS62172). */
-#define BSP_DAC_VREF_V        3.3f
+/* STM32 DAC and ADC reference = VREF+ pin, driven by the internal VREFBUF at
+ * 2.9 V (main.c, SCALE2) -- not VDDA. Full-scale DAC code 4095 = 2.9 V. */
+#define BSP_DAC_VREF_V        2.9f
+#define BSP_ADC_VREF_V        2.9f
 
 /* ── NTC: Steinhart-Hart + divider (copied from UGN, verify for SPUD) ─────── */
 #define BSP_NTC_SH_A    8.757e-4f

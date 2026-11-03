@@ -3,6 +3,8 @@
 #include "main.h"
 #include "uart_rx.h"
 #include "bsp_temp.h"
+#include "bsp_tec.h"
+#include "dac.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -294,9 +296,32 @@ static bool cmd_adc(char *args, bringup_out_fn out, void *ctx)
     return true;
 }
 
+static bool cmd_tec(bringup_out_fn out, void *ctx)
+{
+    uint32_t dac = HAL_DAC_GetValue(BSP_DAC, BSP_DAC_CH_CRYSTAL);
+    float vdac = (float)dac / 4095.0f * BSP_DAC_VREF_V;
+    OUT("TEC: EN=%d  PG=%d  POLARITY=%d (%s)  DAC=%lu (%.3f V)\r\n",
+        HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) == GPIO_PIN_SET,
+        BSP_TEC_PowerGood(),
+        HAL_GPIO_ReadPin(BSP_TEC_POLARITY_PORT, BSP_TEC_POLARITY_PIN) == GPIO_PIN_SET,
+        HAL_GPIO_ReadPin(BSP_TEC_POLARITY_PORT, BSP_TEC_POLARITY_PIN) == GPIO_PIN_SET ? "heat" : "cool",
+        (unsigned long)dac, vdac);
+#if BSP_TEC_CURRENT_MODE
+    float v, a;
+    bool ok = BSP_TEC_Measure(&v, &a);
+    OUT("     current mode: Iout = %.2f A - VDAC -> model %.3f A at this DAC, commanded %.3f A, Imax %.2f A\r\n",
+        BSP_TEC_IOUT_AT_0V_A, BSP_TEC_IOUT_AT_0V_A + BSP_TEC_IOUT_PER_V_A * vdac,
+        BSP_TEC_CommandedCurrent(), BSP_TEC_IMAX_A);
+    if (ok) OUT("     measured: V=%.3f V  I=%.3f A  (ADC2 Vmeas/Imeas)\r\n", v, a);
+    else    out(ctx, "     measured: ADC2 read failed\r\n");
+#endif
+    return true;
+}
+
 bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 {
     char buf[128];
+    if (strcmp(line, "tec") == 0) return cmd_tec(out, ctx);
     if (strncmp(line, "adc", 3) == 0 && (line[3] == '\0' || line[3] == ' ')) {
         strncpy(buf, line + 3, sizeof buf - 1); buf[sizeof buf - 1] = '\0';
         char *a = buf; while (*a == ' ') a++;
@@ -316,6 +341,7 @@ bool Bringup_Process(const char *line, bringup_out_fn out, void *ctx)
 const char *Bringup_HelpText(void)
 {
     return "  adc [<n>]             — bring-up: ADS1220 raw code, V, ohm, C (n samples)\r\n"
+           "  tec                   — bring-up: TEC EN/PG/polarity, DAC, commanded and measured I/V\r\n"
            "  pin [<name> 0|1]      — bring-up: list / drive board pins\r\n"
            "  uart [<name> baud <n> | send <text> | hex <bytes> | loop | stats]\r\n"
            "  uart duplex [<text>]  — all ports TX at once;  uart monitor on|off\r\n"

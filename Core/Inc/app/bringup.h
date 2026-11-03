@@ -8,6 +8,8 @@
  * BSP_BRINGUP_UARTS).
  *
  *   adc [<n>]                   ADS1220: raw code, volts, ohms, celsius (n samples)
+ *   tec                         TEC enable/PG/polarity pins, DAC code, commanded and
+ *                               measured current/voltage (current-mode boards)
  *   pin                         list all table pins with direction and level
  *   pin <name> 0|1              drive a writable pin, read it back
  *   uart                        list the table UARTs with their baud rate

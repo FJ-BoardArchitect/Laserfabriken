@@ -47,6 +47,15 @@ float BSP_TEC_EstimateVoltage(float normalized_output);
 /* Zero the output and disable the buck converter. */
 void BSP_TEC_Disable(TecChannel_t ch);
 
+/* Current-mode boards (BSP_TEC_CURRENT_MODE, SPUD): the current the control
+ * loop is asking for right now, in amps (0 while inert). 0 on other boards. */
+float BSP_TEC_CommandedCurrent(void);
+
+/* Current-mode boards: measure the converter's output voltage and current
+ * (Vmeas/Imeas dividers on ADC2). Returns false (and -1 values) on boards
+ * without the sense network. */
+bool BSP_TEC_Measure(float *volts, float *amps);
+
 /* Read the buck converter's PG (power-good) pin.
  * Returns true when the converter reports healthy output, false on fault. */
 bool BSP_TEC_PowerGood(void);
