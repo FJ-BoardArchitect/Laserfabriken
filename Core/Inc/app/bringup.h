@@ -23,6 +23,10 @@
  * On boards with BSP_UART_RX_PORTS reception goes through uart_rx.c (DMA +
  * idle-line interrupt); "listen" then prints one line per received frame.
  *
+ * Received frames print as   stage rx 3: 01 02 03   -- the receiving port,
+ * byte count, then the bytes in hex. Nothing is printed for what was sent.
+ * send/hex/duplex show what arrived on every port afterwards.
+ *
  * Replies are plain text; in the display's machine mode these commands are
  * never issued, so no protocol line format is affected.
  */

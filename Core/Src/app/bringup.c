@@ -107,39 +107,50 @@ static void rx_flush(const uart_t *u)
 #endif
 }
 
-/* Receive for up to `ms`, printing bytes as hex and as printable text. */
-static void dump_rx(const uart_t *u, uint32_t ms, bringup_out_fn out, void *ctx)
+/* One line per received frame:   stage rx 3: 01 02 03   */
+static void print_rx(const uart_t *u, const uint8_t *d, size_t n, bringup_out_fn out, void *ctx)
+{
+    char line[96];
+    size_t p = (size_t)snprintf(line, sizeof line, "%s rx %u:", u->name, (unsigned)n);
+    for (size_t i = 0; i < n; i++) {
+        if (p > sizeof line - 4) { out(ctx, line); p = 0; line[0] = '\0'; }
+        p += (size_t)snprintf(&line[p], sizeof line - p, " %02X", d[i]);
+    }
+    out(ctx, line);
+    out(ctx, "\r\n");
+}
+
+/* Print every frame that arrives on `u` within `ms`; returns frames seen. */
+static size_t dump_rx(const uart_t *u, uint32_t ms, bringup_out_fn out, void *ctx)
 {
     uint8_t buf[256];                 /* one whole DMA frame */
     uint32_t t0 = HAL_GetTick();
-    size_t total = 0;
+    size_t frames = 0;
     while (HAL_GetTick() - t0 < ms) {
         size_t n = rx_take(u, buf, sizeof buf, 20);
         if (n == 0) continue;
-        total += n;
-        OUT("  rx %2u:", (unsigned)n);
-        for (size_t i = 0; i < n; i += 16) {
-            size_t k = (n - i < 16) ? n - i : 16;
-            char hex[3 * 16 + 1], asc[16 + 1];
-            size_t hp = 0;
-            for (size_t j = 0; j < k; j++) {
-                hp += (size_t)snprintf(&hex[hp], sizeof hex - hp, "%02X ", buf[i + j]);
-                asc[j] = isprint(buf[i + j]) ? (char)buf[i + j] : '.';
-            }
-            asc[k] = '\0';
-            OUT("%s %-48s |%s|\r\n", i ? "        " : "", hex, asc);
-        }
+        frames++;
+        print_rx(u, buf, n, out, ctx);
     }
-    if (total == 0) out(ctx, "  rx: nothing\r\n");
+    return frames;
+}
+
+/* Print what arrives on every table port within `ms` (a message sent on one
+ * port normally shows up on another one). */
+static void dump_rx_all(uint32_t ms, bringup_out_fn out, void *ctx)
+{
+    size_t frames = 0;
+    uint32_t t0 = HAL_GetTick();
+    while (HAL_GetTick() - t0 < ms)
+        for (const uart_t *u = s_uarts; u->name; u++)
+            frames += dump_rx(u, 10, out, ctx);
+    if (frames == 0) out(ctx, "rx: nothing\r\n");
 }
 
 static void uart_send(const uart_t *u, const uint8_t *d, size_t n, bringup_out_fn out, void *ctx)
 {
-    if (HAL_UART_Transmit(u->h, (uint8_t *)d, (uint16_t)n, 200) != HAL_OK) {
-        out(ctx, "  tx: HAL error\r\n");
-        return;
-    }
-    OUT("  tx %2u bytes\r\n", (unsigned)n);
+    if (HAL_UART_Transmit(u->h, (uint8_t *)d, (uint16_t)n, 200) != HAL_OK)
+        OUT("%s tx: HAL error\r\n", u->name);
 }
 
 /* Transmit on every table UART at the same instant (interrupt-driven TX on
@@ -155,7 +166,7 @@ static void cmd_duplex(const char *text, bringup_out_fn out, void *ctx)
     for (size_t i = 0; i < n_ports; i++) {
         len[i] = (size_t)snprintf((char *)msg[i], sizeof msg[i], "%s-from-%s\r\n", text, s_uarts[i].name);
     }
-    out(ctx, "duplex: all ports transmit at the same time\r\n");
+    out(ctx, "duplex: all ports transmit \"<text>-from-<port>\" at the same time\r\n");
     for (size_t i = 0; i < n_ports; i++) {
         if (HAL_UART_Transmit_IT(s_uarts[i].h, msg[i], (uint16_t)len[i]) != HAL_OK)
             OUT("  %s tx: HAL busy/error\r\n", s_uarts[i].name);
@@ -170,12 +181,7 @@ static void cmd_duplex(const char *text, bringup_out_fn out, void *ctx)
         UartRx_Process();
 #endif
     }
-    for (size_t i = 0; i < n_ports; i++)
-        OUT("  %s tx %2u: %.*s\r\n", s_uarts[i].name, (unsigned)len[i], (int)len[i] - 2, (const char *)msg[i]);
-    for (size_t i = 0; i < n_ports; i++) {
-        OUT("  %s:\r\n", s_uarts[i].name);
-        dump_rx(&s_uarts[i], 300, out, ctx);
-    }
+    dump_rx_all(300, out, ctx);
 }
 
 static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
@@ -213,7 +219,7 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         char msg[96];
         snprintf(msg, sizeof msg, "%s\r\n", text ? text : "");
         uart_send(u, (uint8_t *)msg, strlen(msg), out, ctx);
-        dump_rx(u, 300, out, ctx);
+        dump_rx_all(300, out, ctx);
         return true;
     }
     if (strcmp(sub, "hex") == 0) {
@@ -221,7 +227,7 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         while ((tok = strtok(0, " ")) && n < sizeof d) d[n++] = (uint8_t)strtol(tok, 0, 16);
         if (n == 0) { out(ctx, "ERR: give bytes, e.g. 'uart laser hex 01 02 FF'\r\n"); return true; }
         uart_send(u, d, n, out, ctx);
-        dump_rx(u, 300, out, ctx);
+        dump_rx_all(300, out, ctx);
         return true;
     }
     if (strcmp(sub, "listen") == 0) {
@@ -230,7 +236,7 @@ static bool cmd_uart(char *args, bringup_out_fn out, void *ctx)
         if (s < 1) s = 1;
         if (s > 10) s = 10;
         OUT("listening on %s for %ld s ...\r\n", u->name, s);
-        dump_rx(u, (uint32_t)s * 1000u, out, ctx);
+        if (dump_rx(u, (uint32_t)s * 1000u, out, ctx) == 0) OUT("%s rx: nothing\r\n", u->name);
         return true;
     }
     if (strcmp(sub, "loop") == 0) {

@@ -306,7 +306,8 @@ displayen på USB-C M8. Firmware: `SPUD-Debug` ur det nya kortvalsbygget (README
 
 **Bring-up-kommandon** (`Core/Src/app/bringup.c`, tabeller i `boards/<kort>/bsp_config.h`):
 `pin`, `pin <namn> 0|1`, `uart`, `uart <namn> send|hex|listen|loop|baud|echo on|off|stats`,
-`uart duplex [text]` (båda portarna sänder samtidigt, visar tx och rx per port).
+`uart duplex [text]` (båda portarna sänder samtidigt). Mottagna ramar skrivs som
+`stage rx 3: 01 02 03` — mottagande port, antal byte, hex; inget skrivs för det som sändes.
 **Namnen rättade 2026-11-03:** lasern sitter på ZH M9 (LPUART1 PC1/PC0), stage på Molex M20
 (USART2 PA2/PA3) — `.ioc`-etiketterna var spegelvända.
 Debug-bygget speglar dessutom varje rad från displayen som `[usb] ...` på SWD-konsolen.
