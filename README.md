@@ -63,7 +63,7 @@ USART1 (PA9/PA10) är en bidirektionell länk till ESP32-S3-displayen:
 |---|---|---|
 | Kristall-TEC | Ja — TPS563252 + polaritetsomkopplare, fullt implementerad | Samma, oförändrad |
 | Laser-TEC | **Nej** — mjukvaran (PID, `BSP_TEC_Init/SetOutput`) finns och körs, men `bsp_tec.c` returnerar direkt (`if (ch != TEC_CRYSTAL) return;`) för allt som rör laserkanalen. Ingen fysisk drivkrets finns. | Planerad, men drivkretsen är **inte bestämd ännu** — se avsnitt 3.1 för det enda som faktiskt är beslutat |
-| Laserdiodens ström | Kod finns (`bsp_laser.c`, DAC8562S över SPI3), men ingen fysisk DAC8562S är monterad på UGN | Ja — DAC8562S monteras |
+| Laserdiodens ström | Kod finns (`bsp_laser.c`, DAC8562S över SPI3), men ingen fysisk DAC8562S är monterad på UGN | Seriell lasermodul (DK Photonics, EDFA-typ) på LPUART1, `BSP_LASER_SERIAL_DK` i `bsp_laser.c`: binära ramar 9600 8N1, ström i 0,1 mA-steg, mjukvarubrytare, telemetri (Iop, chip-temp, effekt in/ut, larm). Tillståndsmaskin från huvudloopen, aldrig blockerande. Taket `BSP_LASER_MAX_CURRENT_A` (1,5 A, SW-SPEC-001 §3.2) i `bsp_config.h` överskrids aldrig; modulens eget max läses vid uppstart och visas i `status`. `laser on` kräver `crystal.tec on` och strömsätter modulen (LASER_EN/PG) först; `laser module on|off` strömsätter utan att tända. |
 | Laserns temperaturmätning | **Fejkad** — `bsp_temp.c` returnerar samma fysiska NTC-mätning för både `TEMP_CH_CRYSTAL` och `TEMP_CH_LASER` (UGN har bara en NTC) | Egen NTC för laserkanalen |
 
 Det är alltså helt avsiktligt att laser-TEC:n inte gör något på UGN — det är inte en bugg som behöver fixas, det är en kortvariant som saknar hårdvaran.

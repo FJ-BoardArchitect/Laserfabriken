@@ -55,15 +55,22 @@
 #define BSP_ADC_CS_PIN      ADC_CS_Pin
 
 /* ── Laser ───────────────────────────────────────────────────────────────────
- * No DAC8562S on SPUD (BSP_LASER_DAC8562S not defined -> bsp_laser.c is a
- * stub). The laser is a serial module on LPUART1 (ZH1.5 M9) plus LASER_EN/LASER_PG;
- * protocol not decided yet, see Docs/spud_usb_nasta_steg.md. */
+ * No DAC8562S on SPUD. The laser is a DK Photonics light-source module
+ * (EDFA type) on LPUART1 (ZH1.5 M9), 9600 8N1, "Light Source Communication
+ * Protocol" (binary frames, current in 0.1 mA, software switch, telemetry),
+ * driven by the BSP_LASER_SERIAL_DK variant of bsp_laser.c. Powered from
+ * the M15 5 V regulator through LASER_EN, with LASER_PG as power-good. */
+#define BSP_LASER_SERIAL_DK     1
 #define BSP_LASER_UART          (&hlpuart1)
 #define BSP_LASER_EN_PORT       LASER_EN_GPIO_Port
 #define BSP_LASER_EN_PIN        LASER_EN_Pin
 #define BSP_LASER_PG_PORT       LASER_PG_GPIO_Port
 #define BSP_LASER_PG_PIN        LASER_PG_Pin
-#define BSP_LASER_MAX_CURRENT_A 2.0f   /* kept for laser_control.c; unused by the stub */
+/* Hardware maximum laser current, SW-SPEC-001 §3.2/§6: the current never
+ * exceeds this value, whatever the software limit (set laser.maxcurrent,
+ * persisted) or the display asks for. The module's own maximum is read at
+ * power-up (0x51 03 04) and shown by 'status' for comparison only. */
+#define BSP_LASER_MAX_CURRENT_A 1.5f
 
 /* ── Internal DAC: crystal TEC set-point ─────────────────────────────────────
  * DAC1_OUT2 (PA5) -> M2.DACin. No laser TEC channel on SPUD; the placeholder

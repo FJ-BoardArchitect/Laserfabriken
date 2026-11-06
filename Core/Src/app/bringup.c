@@ -4,6 +4,7 @@
 #include "uart_rx.h"
 #include "bsp_temp.h"
 #include "bsp_tec.h"
+#include "bsp_laser.h"
 #include "dac.h"
 #include <string.h>
 #include <stdio.h>
@@ -135,6 +136,15 @@ size_t Bringup_Monitor(bringup_out_fn out, void *ctx)
     for (const uart_t *u = s_uarts; u->name; u++) {
         int port = UartRx_Find(u->h);
         size_t n;
+        if (BSP_Laser_OwnsPort(u->h)) {
+            /* the laser driver consumes this port's frames; it keeps a copy
+             * of every valid reply for us */
+            while ((n = BSP_Laser_PopMonitor(buf, sizeof buf)) > 0) {
+                print_rx(u, buf, n, out, ctx);
+                frames++;
+            }
+            continue;
+        }
         while ((n = UartRx_Pop(port, buf, sizeof buf)) > 0) {
             print_rx(u, buf, n, out, ctx);
             frames++;

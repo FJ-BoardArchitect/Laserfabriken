@@ -153,6 +153,7 @@ int main(void)
       BSP_TEC_SetOutput(TEC_CRYSTAL);
     }
     Params_Process();
+    Laser_Control_Process();
     USBC_Process();
     UartRx_Process();
     CLI_Process();

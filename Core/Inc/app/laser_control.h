@@ -14,6 +14,8 @@ typedef struct {
 extern LaserState_t g_laser_state;
 
 void               Laser_Control_Init(void);
+/* Main loop: runs the laser BSP (serial module state machine on SPUD). */
+void               Laser_Control_Process(void);
 void               Laser_Control_SetCurrent(float amps);
 void               Laser_Control_SetMaxCurrent(float amps);
 void               Laser_Control_SetThreshold(float amps);
