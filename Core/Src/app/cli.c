@@ -3,6 +3,7 @@
 #include "bsp_temp.h"
 #include "tec_control.h"
 #include "laser_control.h"
+#include "bsp_laser.h"
 #include "params.h"
 #include "fw_version.h"
 #include "usbc_port.h"
@@ -513,8 +514,10 @@ static void process_line(cli_chan_t *ch, char *line)
                  "  set laser.temp_timer         <val>  (s)\r\n"
                  "  set sim.laser_temp   <val>  (C) — inject fake laser temp\r\n"
                  "  sim off              — disable sim overrides\r\n"
-                 "  laser on\r\n"
+                 "  laser on             — needs crystal.tec on; powers the module first\r\n"
                  "  laser off\r\n"
+                 "  laser module on|off  — power the serial laser module without emitting\r\n"
+                 "                         (reads its max current); off cuts LASER_EN\r\n"
                  "  5v on\r\n"
                  "  5v off\r\n"
                  "  crystal.tec on\r\n"
@@ -616,6 +619,25 @@ static void process_line(cli_chan_t *ch, char *line)
                   (double)ls->threshold_A,
                   (double)ls->max_current_A,
                   ls->enabled ? "ON" : "OFF");
+#ifdef BSP_LASER_SERIAL_DK
+        const laser_module_t *m = BSP_Laser_Module();
+        cli_sendf(ch, "Laser module: %s  EN=%d PG=%d  switch=%s  Iset=%.4f A  hw max=%.2f A (bsp_config)  module max=%s\r\n",
+                  m->state, (int)m->powered, (int)m->pg, m->emitting ? "on" : "off",
+                  (double)m->set_current_A, (double)BSP_LASER_MAX_CURRENT_A,
+                  m->max_source == 1 ? "" : m->max_source == 2 ? "no answer" : "not read");
+        if (m->max_source == 1)
+            cli_sendf(ch, "  module max=%.4f A%s\r\n", (double)m->module_max_A,
+                      m->module_max_A < BSP_LASER_MAX_CURRENT_A ? "  ** below hw max: lower BSP_LASER_MAX_CURRENT_A **" : "");
+        if (m->telemetry_tick)
+            cli_sendf(ch, "  telemetry %lu ms ago: Iop=%.4f A  Tchip=%.1f C  pin=%u  pout=%u  mode=%u  alarms cur=%u pin=%u pout=%u\r\n",
+                      (unsigned long)(HAL_GetTick() - m->telemetry_tick),
+                      (double)m->iop_A, (double)m->tchip_C,
+                      (unsigned)m->pin_raw, (unsigned)m->pout_raw, (unsigned)m->mode,
+                      (unsigned)m->cur_alm, (unsigned)m->pin_alm, (unsigned)m->pout_alm);
+        cli_sendf(ch, "  link: tx=%lu rx=%lu bad=%lu timeouts=%lu\r\n",
+                  (unsigned long)m->tx_frames, (unsigned long)m->rx_frames,
+                  (unsigned long)m->bad_frames, (unsigned long)m->timeouts);
+#endif
 
         // cli_sendf(ch, "5V output: %s\r\n",
         //     HAL_GPIO_ReadPin(BSP_USBC_VBUS_EN_PORT, BSP_USBC_VBUS_EN_PIN) == GPIO_PIN_SET ? "ON" : "OFF");
@@ -634,25 +656,40 @@ static void process_line(cli_chan_t *ch, char *line)
         return;
     }
 
-    /* laser on / laser off */
+    /* laser on / laser off -- independent of the crystal TEC, except that
+     * the laser refuses to start while the TEC is off: without regulation
+     * the crystal temperature, and with it the wavelength, drifts. The
+     * TEC is never switched by these commands (until 2026-11-06 'laser on'
+     * also enabled the TEC, a UGN-era stopgap from before 'crystal.tec'
+     * existed). In machine mode the refusal is reported as the
+     * authoritative "laser off" so the display's button falls back. */
     if (strcmp(line, "laser on") == 0) {
- 
-        // FJ temporary fix
+        if (HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) != GPIO_PIN_SET) {
+            if (ch->machine) confirm(ch, "laser");
+            else cli_send(ch, "ERR: crystal TEC is off -- 'crystal.tec on' first\r\n");
+            return;
+        }
         Laser_Control_Enable();
-        // cli_send(ch, "OK laser enabled\r\n
-        BSP_TEC_Enable(TEC_CRYSTAL, 1);
-        BSP_TEC_Reset(TEC_CRYSTAL);
-        if (ch->machine) { confirm(ch, "laser"); confirm(ch, "crystal.tec"); }
-        else cli_send(ch, "OK crystal TEC enabled\r\n");
+        if (ch->machine) confirm(ch, "laser");
+        else cli_send(ch, "OK laser enabled\r\n");
         return;
     }
     if (strcmp(line, "laser off") == 0) {
-        // FJ temporary fix
         Laser_Control_Disable();
-        // cli_send(ch, "OK laser disabled\r\n");
-        BSP_TEC_Enable(TEC_CRYSTAL, 0);
-        if (ch->machine) { confirm(ch, "laser"); confirm(ch, "crystal.tec"); }
-        else cli_send(ch, "OK crystal TEC disabled\r\n");
+        if (ch->machine) confirm(ch, "laser");
+        else cli_send(ch, "OK laser disabled\r\n");
+        return;
+    }
+    if (strcmp(line, "laser module on") == 0) {
+        BSP_Laser_Power(true);
+        cli_send(ch, "OK laser module powering up (status shows its reported max current)\r\n");
+        return;
+    }
+    if (strcmp(line, "laser module off") == 0) {
+        Laser_Control_Disable();
+        BSP_Laser_Power(false);
+        if (ch->machine) confirm(ch, "laser");
+        else cli_send(ch, "OK laser module unpowered\r\n");
         return;
     }
 
@@ -864,7 +901,11 @@ static void process_line(cli_chan_t *ch, char *line)
         }
         if (strcmp(param, "laser.maxcurrent") == 0) {
             Laser_Control_SetMaxCurrent(val);
-            cli_sendf(ch, "OK laser.maxcurrent = %.4f A\r\n", (double)val);
+            if (g_laser_state.max_current_A < val)
+                cli_sendf(ch, "OK laser.maxcurrent = %.4f A  (clamped to hw max %.2f A, bsp_config.h)\r\n",
+                          (double)g_laser_state.max_current_A, (double)BSP_LASER_MAX_CURRENT_A);
+            else
+                cli_sendf(ch, "OK laser.maxcurrent = %.4f A\r\n", (double)g_laser_state.max_current_A);
             return;
         }
         if (strcmp(param, "laser.threshold") == 0) {
