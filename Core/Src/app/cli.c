@@ -656,19 +656,12 @@ static void process_line(cli_chan_t *ch, char *line)
         return;
     }
 
-    /* laser on / laser off -- independent of the crystal TEC, except that
-     * the laser refuses to start while the TEC is off: without regulation
-     * the crystal temperature, and with it the wavelength, drifts. The
-     * TEC is never switched by these commands (until 2026-11-06 'laser on'
-     * also enabled the TEC, a UGN-era stopgap from before 'crystal.tec'
-     * existed). In machine mode the refusal is reported as the
-     * authoritative "laser off" so the display's button falls back. */
+    /* laser on / laser off -- fully independent of the crystal TEC: neither
+     * command reads or switches the TEC, and crystal.tec on/off never
+     * touches the laser. On SPUD 'laser on' raises LASER_EN and 'laser off'
+     * drops it (bsp_laser.c). Until 2026-11-06 'laser on' also enabled the
+     * TEC; until 2026-11-11 it refused to start while the TEC was off. */
     if (strcmp(line, "laser on") == 0) {
-        if (HAL_GPIO_ReadPin(BSP_TEC_EN_PORT, BSP_TEC_EN_PIN) != GPIO_PIN_SET) {
-            if (ch->machine) confirm(ch, "laser");
-            else cli_send(ch, "ERR: crystal TEC is off -- 'crystal.tec on' first\r\n");
-            return;
-        }
         Laser_Control_Enable();
         if (ch->machine) confirm(ch, "laser");
         else cli_send(ch, "OK laser enabled\r\n");
