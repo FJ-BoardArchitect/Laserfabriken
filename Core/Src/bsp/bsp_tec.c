@@ -44,6 +44,8 @@ void BSP_TEC_Init(const TecChannel_t ch)
 {
     assert(ch < TEC_CHANNELS);
 
+    HAL_DAC_Start(BSP_DAC, BSP_DAC_CH_CRYSTAL);
+
     BSP_TEC_Reset(ch);
     BSP_TEC_SetDac(ch, 0.0f);
     BSP_TEC_Enable(ch, 0);
@@ -192,7 +194,6 @@ void BSP_TEC_SetRawDAC(uint16_t raw_code)
      * step in small increments and check FB/PG after each one instead of
      * jumping toward 0 directly. */
     HAL_DAC_SetValue(BSP_DAC, BSP_DAC_CH_CRYSTAL, DAC_ALIGN_12B_R, raw_code);
-    HAL_DAC_Start(BSP_DAC, BSP_DAC_CH_CRYSTAL);
 }
 
 void BSP_TEC_SetRawPolarity(bool heat)
