@@ -39,3 +39,7 @@ boards/*/CMakePresets.json
 boards/*/startup_stm32g431xx.s
 boards/*/STM32G431XX_FLASH.ld
 Tools/rtt-cli/__pycache__/
+
+# wl_step_test.py output (CSV + PNG per run)
+Tools/pid-plot/runs/
+Tools/pid-plot/__pycache__/
