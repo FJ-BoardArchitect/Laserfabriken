@@ -49,7 +49,7 @@ class SerialTest:
         self.td = self.ser_thread.__enter__()
 
     def run_test(self, iterations=120, delay=1):
-        self.td.write_cmd('set crystal.kp -0.1')
+        self.td.write_cmd('set crystal.kp 0.1')
         self.td.set_temp(25.0)
         self.td.write_cmd('crystal.tec on')
 
@@ -67,5 +67,5 @@ class SerialTest:
     def close(self):
         self.ser_thread.close()
 
-ser = SerialTest('/dev/ttyACM0')
+ser = SerialTest('/dev/ttyACM1')
 ser.run_test()
