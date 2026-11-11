@@ -22,7 +22,7 @@
  */
 void BSP_Laser_Init(void);
 void BSP_Laser_SetCurrent(float amps);   /* also means "emit": switch on once set */
-void BSP_Laser_Disable(void);            /* current 0, switch off; module stays powered */
+void BSP_Laser_Disable(void);            /* SPUD: LASER_EN low (module unpowered); UGN: DAC 0 */
 
 /* ── Serial module (SPUD) ───────────────────────────────────────────────── */
 typedef struct {

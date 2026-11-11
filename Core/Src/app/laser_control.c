@@ -73,7 +73,7 @@ void Laser_Control_SetThreshold(float amps)
         g_laser_state.current_A = 0.0f;
         g_laser_state.power_pct = 0;
         if (g_laser_state.enabled)
-            BSP_Laser_Disable();
+            BSP_Laser_SetCurrent(0.0f);   /* stays on (LASER_EN high), just no current */
     } else {
         /* Threshold changed — recompute power percentage */
         g_laser_state.power_pct = current_to_pct(g_laser_state.current_A);

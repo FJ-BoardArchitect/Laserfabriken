@@ -351,15 +351,19 @@ modul fungerar. `KNOB_DEBUG` i sketchen ger den diagnostiken över länken.
 (EDFA-modul, dokument i Obsidian under components/). Implementerat i `bsp_laser.c`
 (`BSP_LASER_SERIAL_DK`): `laser on` strömsätter modulen via LASER_EN, väntar på LASER_PG och
 modulens uppstart, läser dess maxström (0x51 03 04), sätter ström (0x52, 0,1 mA-steg) och slår på
-mjukvarubrytaren (0x0A); `laser off` slår av brytaren men låter modulen vara strömsatt så att
-temperatur och larm kan läsas (0x00 en gång per sekund, visas i `status`). Taket är
+mjukvarubrytaren (0x0A); `laser off` drar LASER_EN låg direkt, så modulen är strömlös när
+lasern är av (sedan 2026-11-11; dessförinnan slog den bara av brytaren). Telemetri (0x00 en gång
+per sekund, visas i `status`) finns alltså bara medan lasern är på. Taket är
 `BSP_LASER_MAX_CURRENT_A` = 1,5 A enligt SW-SPEC-001 §3.2; mjukvarugränsen `laser.maxcurrent`
 klampas dit, förstagångsvärde 0,1 A (specens idrifttagningsregel). Modulens rapporterade max
 visas bara för jämförelse. Avvikelser mot specen: modulens upplösning är 0,1 mA (specen säger
 50 µA), och displayen styr fortfarande i procent (specen säger ampere i 0,01 A-steg).
 Mottagna svar syns i `uart monitor` som förut. **Ej testat mot en riktig modul** -- bara att
-tillståndsmaskinen går till "ready" med "no answer" utan modul. `laser on` och `crystal.tec` är
-frikopplade sedan samma dag: `laser on` vägrar när TEC:n är av, och rör aldrig TEC:n.
+tillståndsmaskinen går till "ready" med "no answer" utan modul. **Laser och TEC är helt
+oberoende (2026-11-11):** `laser on` → LASER_EN=1, `laser off` → LASER_EN=0, `crystal.tec on` →
+TEC_EN=1, `crystal.tec off` → TEC_EN=0, i alla kombinationer och ordningar; inget av kommandona
+läser eller ändrar den andra. Verifierat på kort genom att läsa PA0 och PC14 efter varje kommando.
+(Spärren "laser on kräver TEC" från 2026-11-06 är borttagen.)
 
 **Kvar på SPUD:** köra lasermodulen på riktigt (maxström, enheter för pin/pout, larmnollställning
 saknas i protokolldokumentet), vad STAGE (USART2 på Molex M20 + P1–P4) är,

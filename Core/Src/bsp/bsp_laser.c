@@ -74,9 +74,10 @@ size_t BSP_Laser_PopMonitor(uint8_t *dst, size_t max) { (void)dst; (void)max; re
  *   0x52  set current in ACC mode: 22 HSB 23 LSB 20 0D 15, /10 mA
  *   0x0A  software switch 0/1 (reply carries CMD 0x0B)
  *
- * The module is powered from LASER_EN (5 V regulator with LASER_PG) and is
- * left powered once it has been switched on, so temperature and alarms can
- * be read while the laser is off. BSP_Laser_Power(false) cuts it.
+ * The module is powered from LASER_EN (5 V regulator with LASER_PG). LASER_EN
+ * follows the laser on/off state: BSP_Laser_SetCurrent() ('laser on') raises
+ * it, BSP_Laser_Disable() ('laser off') drops it at once. Telemetry is only
+ * available while the laser is on.
  *
  * Power-up sequence, driven from BSP_Laser_Process():
  *   OFF -> PG (LASER_EN high, wait for LASER_PG) -> BOOT (module start-up
@@ -312,10 +313,10 @@ void BSP_Laser_SetCurrent(float amps)
 
 void BSP_Laser_Disable(void)
 {
-    s_want_emit = false;
+    /* laser off = LASER_EN low, immediately; no UART exchange to wait for */
+    BSP_Laser_Power(false);
     s_pending_A = 0.0f;
-    /* nothing to undo on a module that never got a current or the switch */
-    s_pending_dirty = (s_m.set_current_A != 0.0f) || s_m.emitting;
+    s_pending_dirty = false;
 }
 
 void BSP_Laser_Power(bool on)
