@@ -1381,10 +1381,10 @@ void CLI_Process(void)
     /* Print TEC power-good fault notification as soon as it is set by the control loop */
     if (g_tec_pg_fault_pending == 1) {
         g_tec_pg_fault_pending = 2; /* 2 = printed, waiting for clear */
-        cli_send(ch, "\r\nTEC buck power-good fault (PG low) !!\r\n> ");
+        // cli_send(ch, "\r\nTEC buck power-good fault (PG low) !!\r\n> ");
     } else if (g_tec_pg_fault_pending == 3) {
         g_tec_pg_fault_pending = 0;
-        cli_send(ch, "\r\nTEC buck power-good OK\r\n> ");
+        // cli_send(ch, "\r\nTEC buck power-good OK\r\n> ");
     }
 
     /* Print trip notification as soon as it is set by the control loop */
