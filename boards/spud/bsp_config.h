@@ -62,10 +62,10 @@
  * the M15 5 V regulator through LASER_EN, with LASER_PG as power-good. */
 #define BSP_LASER_SERIAL_DK     1
 #define BSP_LASER_UART          (&hlpuart1)
-#define BSP_LASER_EN_PORT       LASER_EN_GPIO_Port
-#define BSP_LASER_EN_PIN        LASER_EN_Pin
-#define BSP_LASER_PG_PORT       LASER_PG_GPIO_Port
-#define BSP_LASER_PG_PIN        LASER_PG_Pin
+#define BSP_LASER_EN_PORT       AUX_EN_GPIO_Port
+#define BSP_LASER_EN_PIN        AUX_EN_Pin
+#define BSP_LASER_PG_PORT       AUX_PG_GPIO_Port
+#define BSP_LASER_PG_PIN        AUX_PG_Pin
 /* Hardware maximum laser current, SW-SPEC-001 §3.2/§6: the current never
  * exceeds this value, whatever the software limit (set laser.maxcurrent,
  * persisted) or the display asks for. The module's own maximum is read at
